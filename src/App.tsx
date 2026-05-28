@@ -167,6 +167,7 @@ export default function App() {
   const [isCreateFolderExpanded, setIsCreateFolderExpanded] = useState(false);
   const [isCreateProjectExpanded, setIsCreateProjectExpanded] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [searchVersion, setSearchVersion] = useState(0);
 
   // Option A State & Methods
   const [toasts, setToasts] = useState<{ id: string; type: "success" | "warning" | "error" | "info"; message: string }[]>([]);
@@ -221,7 +222,10 @@ export default function App() {
 
   // Global Workspace Configuration
   const [workspaceDir, setWorkspaceDir] = useState<string>("C:\\Users\\Ming\\Desktop\\Ledger Pro Max\\Workspace");
-  const inboxName = "00收集箱";
+  const workspaceDirRef = useRef(workspaceDir);
+  useEffect(() => { workspaceDirRef.current = workspaceDir; }, [workspaceDir]);
+  const [workspaceLang, setWorkspaceLang] = useState<"zh" | "en">("zh");
+  const inboxName = workspaceLang === "en" ? "00Inbox" : "00收集箱";
   const [monitoredDirs, setMonitoredDirs] = useState<string>("C:\\Users\\Ming\\Downloads");
   const [backupDiskDir, setBackupDiskDir] = useState<string>("D:\\LedgerBackup\\Disk");
   const [backupCloudDir, setBackupCloudDir] = useState<string>("D:\\LedgerBackup\\Cloud");
@@ -263,6 +267,7 @@ export default function App() {
   const [newTagText, setNewTagText] = useState("");
 
   const [workspaceFiles, setWorkspaceFiles] = useState<FileRecord[]>([]);
+  const [allWorkspaceFiles, setAllWorkspaceFiles] = useState<FileRecord[]>([]);
   const [newProjectInput, setNewProjectInput] = useState("");
   const projectSubdirs = ["docs", "src", "data", "assets", "models", "output", "test"];
 
@@ -322,11 +327,19 @@ export default function App() {
 
   const [chosenTags, setChosenTags] = useState<string[]>([]);
 
-  const standardDirs = [
+  const standardDirsZh = [
     "00收集箱", "01课程学习", "02课题研究", "03项目管理", "04代码仓库",
     "05学术论文", "06知识笔记", "07常用资源", "08演示汇报", "09个人简历",
     "10归档区", "99临时缓冲"
   ];
+
+  const standardDirsEn = [
+    "00Inbox", "01Courses", "02Research", "03Projects", "04Code",
+    "05Papers", "06Notes", "07Resources", "08Slides", "09Resumes",
+    "10Archive", "99Sandbox"
+  ];
+
+  const standardDirs = workspaceLang === "en" ? standardDirsEn : standardDirsZh;
 
   useEffect(() => {
     if (!selectedCategory) return;
@@ -439,20 +452,23 @@ export default function App() {
       setDesktopSummary(sum);
 
       // 2. Fetch Inbox Files
-      const allFiles: FileRecord[] = await invoke("search_files", { workspaceDir });
+      const allFiles: FileRecord[] = await invoke("search_files", { workspaceDir: workspaceDirRef.current });
       const inboxList = allFiles.filter(f => (f.filepath as string).replace(/\\/g, "/").startsWith(inboxName + "/"));
       setInboxFiles(inboxList);
 
       // 3. General workspace files
       setWorkspaceFiles(allFiles);
+      setAllWorkspaceFiles(allFiles);
 
       // 4. Tag distribution
-      const dist: any = await invoke("get_tag_distribution", { workspaceDir });
+      const dist: any = await invoke("get_tag_distribution", { workspaceDir: workspaceDirRef.current });
       setTagDistribution(dist);
 
       // 5. Backup history
-      const hist: any = await invoke("get_backup_history", { workspaceDir, limit: 10 });
+      const hist: any = await invoke("get_backup_history", { workspaceDir: workspaceDirRef.current, limit: 10 });
       setBackupHistory(hist);
+
+      setSearchVersion(s => s + 1);
     } catch (err) {
       console.error(err);
     }
@@ -479,7 +495,7 @@ export default function App() {
       await handleScanWorkspace();
       setActiveTab("inbox");
 
-      const allFiles: FileRecord[] = await invoke("search_files", { workspaceDir });
+      const allFiles: FileRecord[] = await invoke("search_files", { workspaceDir: workspaceDirRef.current });
       const inboxList = allFiles.filter(f => (f.filepath as string).replace(/\\/g, "/").startsWith(inboxName + "/"));
       const importedFile = inboxList.find(f => f.filepath === finalRel);
       if (importedFile) {
@@ -501,6 +517,7 @@ export default function App() {
     const initApp = async () => {
       let resolvedWorkspaceDir = workspaceDir;
       let resolvedMonitoredDirs = monitoredDirs;
+      let resolvedWorkspaceLang = "zh";
       try {
         const config: any = await invoke("load_config");
         if (config) {
@@ -512,6 +529,11 @@ export default function App() {
           setBackupDiskDir(config.backup_disk_dir || "");
           setBackupCloudDir(config.backup_cloud_dir || "");
           
+          if (config.workspace_lang) {
+            resolvedWorkspaceLang = config.workspace_lang;
+            setWorkspaceLang(config.workspace_lang as any);
+          }
+
           // Fallback loaded theme to light/dark
           let loadedTheme = config.theme;
           if (loadedTheme === "zhongguose" || loadedTheme === "jade") loadedTheme = "light";
@@ -526,7 +548,8 @@ export default function App() {
 
       // Initialize workspace & scan with the resolved (loaded) path — NOT the stale state value
       try {
-        await invoke("init_workspace", { workspaceDir: resolvedWorkspaceDir, dirs: standardDirs });
+        const dirsToInit = resolvedWorkspaceLang === "en" ? standardDirsEn : standardDirsZh;
+        await invoke("init_workspace", { workspaceDir: resolvedWorkspaceDir, dirs: dirsToInit });
         await invoke("scan_workspace", { workspaceDir: resolvedWorkspaceDir });
         await handleRefreshData();
         addLog("工作空间初始化成功！");
@@ -564,7 +587,7 @@ export default function App() {
         size: payload.file_size,
         filepath: payload.filepath
       });
-      handleRefreshData();
+      refreshDataRef.current();
       toastTimeoutRef.current = setTimeout(() => setNotification(null), 15000);
     });
 
@@ -573,7 +596,7 @@ export default function App() {
     const unlistenDragDrop = listen("tauri://drag-drop", (event: any) => {
       setIsDragging(false);
       const paths: string[] = event.payload.paths;
-      if (paths && paths.length > 0) handleBatchImportToInbox(paths);
+      if (paths && paths.length > 0) importToInboxRef.current(paths);
     });
 
     return () => {
@@ -662,7 +685,7 @@ export default function App() {
         monitored_downloads: true,
         auto_rule_enabled: true,
         tags: tagsState,
-        workspace_lang: "zh",
+        workspace_lang: workspaceLang,
         use_custom_dirs: false,
         custom_standard_dirs: [],
         auto_rules: autoRulesState,
@@ -736,7 +759,7 @@ export default function App() {
       }
     };
     triggerSearch();
-  }, [searchQuery, selectedCategory, selectedTagsFilter, statusFilter, extensionFilter]);
+  }, [searchQuery, selectedCategory, selectedTagsFilter, statusFilter, extensionFilter, searchVersion]);
 
   // Tag Recommendations & Rules Suggestion when selecting inbox file
   useEffect(() => {
@@ -886,7 +909,7 @@ export default function App() {
     }
     try {
       await invoke("init_project", { projectName: newProjectInput.trim(), workspaceDir, standardDirs });
-      addLog(`成功在 03项目管理 中初始化项目 '${newProjectInput}' 结构！`);
+      addLog(`成功在 ${standardDirs[3] || "03项目管理"} 中初始化项目 '${newProjectInput}' 结构！`);
       showToast(`项目空间已初始化: ${projectFinalPath}`, "success");
       setNewProjectInput("");
       await handleRefreshData();
@@ -917,6 +940,12 @@ export default function App() {
   // Execute Backup
   const handleRunBackup = async (type: "disk" | "cloud") => {
     const targetDir = type === "disk" ? backupDiskDir : backupCloudDir;
+    if (!targetDir.trim()) {
+      const label = type === "disk" ? "外部硬盘" : "云盘";
+      addBackupLog(`[错误] ${label}备份路径未配置，请在控制面板中设置后再执行备份。`);
+      showToast(`请先在控制面板中配置${label}备份路径`, "warning");
+      return;
+    }
     addBackupLog(`正在向 ${type === "disk" ? "硬盘" : "云盘"} 备份数据 (${targetDir})...`);
     try {
       const msg: string = await invoke("perform_backup", { backupType: type, workspaceDir, destDir: targetDir });
@@ -929,7 +958,8 @@ export default function App() {
 
   // Get Formatted Name based on selected template
   const getFormattedName = (originalName: string) => {
-    const ext = originalName.substring(originalName.lastIndexOf("."));
+    const dotIdx = originalName.lastIndexOf(".");
+    const ext = dotIdx > 0 ? originalName.substring(dotIdx) : "";
     const today = new Date().toISOString().substring(0, 10).replace(/-/g, "");
     const topic = topicName.trim() === "" ? "无主题" : topicName.trim();
     
@@ -999,6 +1029,7 @@ export default function App() {
       addLog(`删除成功: ${filepath}`);
       setSelectedWorkspaceFile(null);
       setSelectedInboxFile(null);
+      setPreviewFile(null);
       await handleRefreshData();
     } catch (err: any) {
       addLog(`[错误] 删除失败: ${err}`);
@@ -1108,19 +1139,19 @@ export default function App() {
   };
 
   // --- SYSTEM DATA DASHBOARD CALCULATIONS ---
-  const totalFiles = workspaceFiles.length;
-  const totalBytes = workspaceFiles.reduce((sum, f) => sum + Number(f.file_size || 0), 0);
+  const totalFiles = allWorkspaceFiles.length;
+  const totalBytes = allWorkspaceFiles.reduce((sum, f) => sum + Number(f.file_size || 0), 0);
   const formattedSize = totalBytes > 1024 * 1024 * 1024 
     ? (totalBytes / (1024 * 1024 * 1024)).toFixed(2) + " GB" 
     : (totalBytes / (1024 * 1024)).toFixed(2) + " MB";
   const unorganizedCount = inboxFiles.length;
 
-  const uniqueTagsList = Array.from(new Set(workspaceFiles.flatMap(f => 
+  const uniqueTagsList = Array.from(new Set(allWorkspaceFiles.flatMap(f => 
     String(f.tags || "").split(",").map(t => t.trim()).filter(Boolean)
   )));
   const tagsCount = uniqueTagsList.length;
 
-  const recentFilesCount = workspaceFiles.filter(f => 
+  const recentFilesCount = allWorkspaceFiles.filter(f => 
     (new Date().getTime() - Number(f.modified_time) * 1000) <= 7 * 24 * 60 * 60 * 1000
   ).length;
 
@@ -1129,7 +1160,7 @@ export default function App() {
   const backupScore = 40 + (hasDiskBackup ? 30 : 0) + (hasCloudBackup ? 30 : 0);
 
   const tagCountsMap: Record<string, number> = {};
-  workspaceFiles.forEach(f => {
+  allWorkspaceFiles.forEach(f => {
     String(f.tags || "").split(",").map(t => t.trim()).filter(Boolean).forEach(tag => {
       tagCountsMap[tag] = (tagCountsMap[tag] || 0) + 1;
     });
@@ -1161,11 +1192,11 @@ export default function App() {
     }
   };
 
-  const topRecentFiles = [...workspaceFiles]
+  const topRecentFiles = [...allWorkspaceFiles]
     .sort((a, b) => Number(b.modified_time) - Number(a.modified_time))
     .slice(0, 5);
 
-  const weeklyTrendData = getWeeklyActivity(workspaceFiles);
+  const weeklyTrendData = getWeeklyActivity(allWorkspaceFiles);
   const maxWeeklyCount = Math.max(...weeklyTrendData.map(d => d.count), 1);
 
   // SVG Spline Chart Constants
@@ -2182,9 +2213,9 @@ export default function App() {
               </div>
 
               {/* Right Panel: Smart naming & categorization */}
-              <div>
+              <div style={{ height: "100%", overflow: "hidden" }}>
                 {selectedInboxFile ? (
-                  <div style={{height: "100%", display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", overflowY: "auto"}}>
+                  <div style={{height: "100%", display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", overflow: "hidden"}}>
                       <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px", flexShrink: 0}}>
                         <div>
                           <h3 className="card-title" style={{margin: 0}}>🏷️ 智能归档与命名</h3>
@@ -2211,7 +2242,7 @@ export default function App() {
                         </button>
                       </div>
 
-                        <div style={{display: "flex", flexDirection: "column", gap: "16px", paddingRight: "4px"}}>
+                        <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, overflowY: "auto", paddingRight: "4px", minHeight: 0}}>
                           {/* Name template */}
                           <div>
                             <label style={{fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "8px"}}>命名模版</label>
@@ -2360,7 +2391,7 @@ export default function App() {
                           <div>
                             <label style={{fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "8px"}}>🚀 目标归档分类</label>
                             <select 
-                              value={targetCategory} 
+                              value={standardDirs.includes(targetCategory) ? targetCategory : (standardDirs[1] || "")} 
                               onChange={(e) => setTargetCategory(e.target.value)}
                               className="input-field"
                             >
@@ -2385,9 +2416,11 @@ export default function App() {
                         </div>
 
                         {/* Preview Naming */}
-                        <div style={{background: theme === "light" ? "rgba(0, 0, 0, 0.02)" : "rgba(255,255,255,0.02)", padding: "16px", borderRadius: "12px", border: "1px solid var(--border-light)", flexShrink: 0}}>
+                        <div style={{background: theme === "light" ? "rgba(0, 0, 0, 0.02)" : "rgba(255,255,255,0.02)", padding: "12px 16px", borderRadius: "12px", border: "1px solid var(--border-light)", flexShrink: 0}}>
                           <div style={{fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px"}}>更名预览</div>
-                          <div style={{fontSize: "13px", wordBreak: "break-all", fontWeight: 600, color: "var(--color-primary)"}}>{getFormattedName(selectedInboxFile.filename.toString())}</div>
+                          <div style={{fontSize: "13px", wordBreak: "break-all", fontWeight: 600, color: "var(--color-primary)", maxHeight: "72px", overflowY: "auto", paddingRight: "4px"}} title={getFormattedName(selectedInboxFile.filename.toString())}>
+                            {getFormattedName(selectedInboxFile.filename.toString())}
+                          </div>
                         </div>
 
                         <button className="btn btn-primary" onClick={handleArchiveFile} disabled={isArchiving} style={{width: "100%", justifyContent: "center", flexShrink: 0, opacity: isArchiving ? 0.7 : 1}}>
@@ -2433,7 +2466,7 @@ export default function App() {
                     const match = dir.match(/^(\d+)(.*)$/);
                     const num = match ? match[1] : "";
                     const name = match ? match[2].trim() : dir;
-                    const count = workspaceFiles.filter(f => {
+                    const count = allWorkspaceFiles.filter(f => {
                       const normalizedPath = (f.filepath as string).replace(/\\/g, "/");
                       return normalizedPath.startsWith(dir + "/");
                     }).length;
@@ -3135,15 +3168,15 @@ export default function App() {
               </div>
 
               {/* Right Column: File Details / Actions */}
-              <div>
+              <div style={{ height: "100%", overflow: "hidden" }}>
                 {selectedWorkspaceFile ? (
-                  <div className="cyber-card" style={{height: "100%", display: "flex", flexDirection: "column", gap: "20px"}}>
+                  <div className="cyber-card" style={{height: "100%", display: "flex", flexDirection: "column", gap: "20px", overflow: "hidden"}}>
                     <div>
                       <h3 className="card-title" style={{fontSize: "16px"}}>{selectedWorkspaceFile.filename}</h3>
                       <p style={{fontSize: "12px", color: "var(--text-muted)", marginTop: "4px", wordBreak: "break-all"}}>{selectedWorkspaceFile.filepath}</p>
                     </div>
 
-                    <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, overflowY: "auto", paddingRight: "4px"}}>
+                    <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, overflowY: "auto", paddingRight: "4px", minHeight: 0}}>
                       <div>
                         <span style={{fontSize: "12px", color: "var(--text-muted)", display: "block", marginBottom: "4px"}}>文件尺寸</span>
                         <div style={{fontSize: "13px", fontWeight: 500}}>{formatSize(selectedWorkspaceFile.file_size)}</div>
@@ -3743,6 +3776,23 @@ export default function App() {
                       </div>
                     );
                   })}
+
+                  {/* 🆕 Workspace Initialization Specification Selector */}
+                  <div className="settings-field" style={{ gridColumn: "span 2" }}>
+                    <label>工作空间初始目录规格</label>
+                    <select
+                      value={workspaceLang}
+                      onChange={(e) => setWorkspaceLang(e.target.value as "zh" | "en")}
+                      className="input-field"
+                      style={{ cursor: "pointer" }}
+                    >
+                      <option value="zh">中文标准初始化规范 (以 "00收集箱" 命名目录)</option>
+                      <option value="en">English Standard Specification (Initializes as "00Inbox" directory)</option>
+                    </select>
+                    <div className="settings-status ok" style={{ marginTop: "6px" }}>
+                      选择在首次建立或重置工作空间时的标准目录语言：当前模式将创建 <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{workspaceLang === "en" ? "00Inbox" : "00收集箱"}</span> 等 12 个基础目录。
+                    </div>
+                  </div>
                 </div>
               </section>
 
@@ -4359,7 +4409,7 @@ export default function App() {
           <div className="drag-drop-box">
             <div style={{ fontSize: "40px", animation: "bounce 1.5s infinite" }}>📥</div>
             <h2 style={{ fontSize: "20px", fontWeight: 700 }}>释放以智能导入外部文档</h2>
-            <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>文件将自动搬运至 00收集箱 并执行 AI 智能推荐归档</p>
+            <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>文件将自动搬运至 {inboxName} 并执行 AI 智能推荐归档</p>
           </div>
         </div>
       )}

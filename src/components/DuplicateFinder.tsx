@@ -199,7 +199,7 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {groupKeys.map((groupKey, groupIdx) => {
               const group = duplicateGroups[groupKey];
-              const displayKey = mode === "hash" ? `HASH: ${groupKey.substring(0, 16)}...` : mode === "size" ? `大小: ${formatSize(parseInt(groupKey))}` : `文件名: ${groupKey}`;
+              const displayKey = mode === "hash" ? `HASH: ${groupKey.substring(0, 16)}...` : mode === "size" ? `大小: ${formatSize(parseFloat(groupKey))}` : `文件名: ${groupKey}`;
 
               return (
                 <div

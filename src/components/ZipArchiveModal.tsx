@@ -22,7 +22,7 @@ export default function ZipArchiveModal({
 }: ZipArchiveModalProps) {
   const [zipName, setZipName] = useState<string>("");
   const [progress, setProgress] = useState<number>(0);
-  const [status, setStatus] = useState<"idle" | "compressing" | "verifying" | "completed" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "compressing" | "completed" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   useEffect(() => {
@@ -31,25 +31,12 @@ export default function ZipArchiveModal({
     setZipName(`归档_${today}.zip`);
   }, []);
 
-  // Simulate progress bar movement during long ZIP actions to enhance visual premium feel
   useEffect(() => {
-    let interval: any;
-    if (status === "compressing") {
-      interval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 85) {
-            clearInterval(interval);
-            return 85;
-          }
-          return prev + Math.floor(Math.random() * 8) + 2;
-        });
-      }, 200);
-    } else if (status === "verifying") {
-      setProgress(95);
-    } else if (status === "completed") {
+    if (status === "completed") {
       setProgress(100);
+    } else if (status === "idle" || status === "error") {
+      setProgress(0);
     }
-    return () => clearInterval(interval);
   }, [status]);
 
   const handleArchive = async () => {
@@ -65,19 +52,12 @@ export default function ZipArchiveModal({
     }
 
     setStatus("compressing");
-    setProgress(15);
+    setProgress(0);
     setErrorMessage("");
 
     addLog(`开始将 ${selectedFilenames.length} 个文件打包归档至: 10归档区/${cleanZipName}`);
 
     try {
-      // Step 1: Compress on Rust Backend
-      await new Promise((r) => setTimeout(r, 600)); // Visual buffer for sleek micro-animations
-      setStatus("verifying");
-      addLog("物理写入完成，正在解压进行 SHA-256 强一致性哈希双重物理校验...");
-
-      // Step 2: Verification and atomicity
-      await new Promise((r) => setTimeout(r, 500));
       const actualZipName: string = await invoke("archive_to_zip", {
         workspaceDir,
         filenames: selectedFilenames,
@@ -85,8 +65,9 @@ export default function ZipArchiveModal({
       });
 
       setStatus("completed");
-      addLog(`✨ 归档打包成功！物理哈希校验 100% 相同。源文件已被安全清除。生成归档：${actualZipName}`);
-      
+      setProgress(100);
+      addLog(`归档打包成功！生成归档：${actualZipName}`);
+
       setTimeout(() => {
         onSuccess();
         onClose();
@@ -99,7 +80,7 @@ export default function ZipArchiveModal({
     }
   };
 
-  const isWorking = status === "compressing" || status === "verifying";
+  const isWorking = status === "compressing";
 
   return (
     <div
@@ -179,8 +160,7 @@ export default function ZipArchiveModal({
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--text-secondary)" }}>
                       <span>
-                        {status === "compressing" && "🤐 正在执行多线程压缩..."}
-                        {status === "verifying" && "🔒 正在执行 SHA-256 哈希校验..."}
+                        {status === "compressing" && "正在压缩打包并校验完整性..."}
                       </span>
                       <span>{progress}%</span>
                     </div>
