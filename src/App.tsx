@@ -358,11 +358,16 @@ export default function App() {
     "10Archive", "99Sandbox"
   ];
 
+  const standardDirsZhBasic = ["A0-收集箱"];
+  const standardDirsEnBasic = ["A0-Inbox"];
+
   const standardDirPresets: Record<string, string[]> = {
     "zh-full": standardDirsZhFull,
     "zh-min": standardDirsZhMin,
+    "zh-basic": standardDirsZhBasic,
     "en-full": standardDirsEnFull,
     "en-min": standardDirsEnMin,
+    "en-basic": standardDirsEnBasic,
   };
 
   const standardDirs = standardDirPresets[workspaceLang] || standardDirsZhFull;
@@ -3825,8 +3830,10 @@ export default function App() {
                     >
                       <option value="zh-full">中文标准版 (12 个目录 — 课程/研究/项目/代码/论文/笔记/资源等)</option>
                       <option value="zh-min">中文精简版 (6 个目录 — 课程/研究/项目/归档)</option>
-                      <option value="en-full">English Standard (12 dirs — Courses/Research/Projects/Code/Papers etc.)</option>
-                      <option value="en-min">English Minimal (6 dirs — Courses/Research/Projects/Archive)</option>
+                      <option value="zh-basic">中文基础版 (1 个目录 — A0-收集箱)</option>
+                      <option value="en-full">English Standard (12 dirs)</option>
+                      <option value="en-min">English Minimal (6 dirs)</option>
+                      <option value="en-basic">English Basic (1 dir — A0-Inbox)</option>
                     </select>
                     <div className="settings-status ok" style={{ marginTop: "6px" }}>
                       当前模板将创建 <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{(standardDirPresets[workspaceLang] || standardDirsZhFull).length}</span> 个基础目录：
