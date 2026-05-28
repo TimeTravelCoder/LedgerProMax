@@ -318,6 +318,15 @@ export default function App() {
   const [editingRuleIndex, setEditingRuleIndex] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState<string>("");
+
+  useEffect(() => {
+    if (!configLoaded) return;
+    if (saveStatus === "saved" || saveStatus === "error") {
+      setSaveStatus("idle");
+      setSaveMessage("");
+    }
+  }, [workspaceDir, monitoredDirs, backupDiskDir, backupCloudDir, theme, tagsState, autoRulesState, namingTemplates, workspaceLang]);
+
   const [pathValidation, setPathValidation] = useState<PathValidationMap>({
     workspace: null,
     monitor: null,
@@ -453,7 +462,8 @@ export default function App() {
 
       // 2. Fetch Inbox Files
       const allFiles: FileRecord[] = await invoke("search_files", { workspaceDir: workspaceDirRef.current });
-      const inboxList = allFiles.filter(f => (f.filepath as string).replace(/\\/g, "/").startsWith(inboxName + "/"));
+      const isInbox = (fp: string) => fp.startsWith("00收集箱/") || fp.startsWith("00Inbox/");
+      const inboxList = allFiles.filter(f => isInbox((f.filepath as string).replace(/\\/g, "/")));
       setInboxFiles(inboxList);
 
       // 3. General workspace files
@@ -496,7 +506,8 @@ export default function App() {
       setActiveTab("inbox");
 
       const allFiles: FileRecord[] = await invoke("search_files", { workspaceDir: workspaceDirRef.current });
-      const inboxList = allFiles.filter(f => (f.filepath as string).replace(/\\/g, "/").startsWith(inboxName + "/"));
+      const isInbox = (fp: string) => fp.startsWith("00收集箱/") || fp.startsWith("00Inbox/");
+      const inboxList = allFiles.filter(f => isInbox((f.filepath as string).replace(/\\/g, "/")));
       const importedFile = inboxList.find(f => f.filepath === finalRel);
       if (importedFile) {
         setSelectedInboxFile(importedFile);
@@ -541,6 +552,12 @@ export default function App() {
 
           if (config.tags) setTagsState(config.tags);
           if (config.auto_rules) setAutoRulesState(config.auto_rules);
+          if (config.custom_name_templates && config.custom_name_templates.length > 0) {
+            setNamingTemplates(prev => [
+              ...prev.filter(t => !t.key.startsWith("custom_")),
+              ...config.custom_name_templates
+            ]);
+          }
         }
       } catch (err) {
         console.error("加载配置文件失败:", err);
@@ -686,10 +703,8 @@ export default function App() {
         auto_rule_enabled: true,
         tags: tagsState,
         workspace_lang: workspaceLang,
-        use_custom_dirs: false,
-        custom_standard_dirs: [],
         auto_rules: autoRulesState,
-        custom_name_templates: []
+        custom_name_templates: namingTemplates.filter(t => t.key.startsWith("custom_"))
       };
       await invoke("save_config", { config });
       addLog("全局系统配置已成功保存并同步！");
@@ -875,6 +890,11 @@ export default function App() {
     if (!editingTag) return;
     const nextValue = normalizeTag(editingTagValue);
     if (!nextValue) return;
+
+    if (nextValue !== editingTag.value && tagsState[editingTag.group].includes(nextValue)) {
+      showToast(`标签 "${nextValue}" 已存在，请使用不同的名称。`, "warning");
+      return;
+    }
 
     setTagsState(prev => ({
       ...prev,

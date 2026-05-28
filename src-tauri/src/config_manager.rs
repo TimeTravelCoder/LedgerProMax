@@ -35,8 +35,6 @@ pub struct AppConfig {
     pub auto_rule_enabled: bool,
     pub tags: TagGroups,
     pub workspace_lang: String,
-    pub use_custom_dirs: bool,
-    pub custom_standard_dirs: Vec<String>,
     pub auto_rules: Vec<AutoRule>,
     pub custom_name_templates: Vec<serde_json::Value>,
 }
@@ -88,8 +86,6 @@ impl Default for AppConfig {
                 ],
             },
             workspace_lang: "en".to_string(),
-            use_custom_dirs: false,
-            custom_standard_dirs: Vec::new(),
             auto_rules: vec![
                 AutoRule {
                     name: "论文文档".to_string(),
