@@ -112,7 +112,7 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
   const groupKeys = Object.keys(duplicateGroups);
 
   return (
-    <div className="cyber-card" style={{ display: "flex", flexDirection: "column", gap: "20px", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", height: "100%", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px" }}>
       <div>
         <h3 className="card-title">👯 智能查重清理中心</h3>
         <p className="card-desc" style={{ marginTop: "4px" }}>
@@ -173,7 +173,7 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
       </div>
 
       {/* Scanning Content Grid */}
-      <div style={{ flex: 1, overflowY: "auto", minHeight: "260px", maxHeight: "calc(100vh - 420px)", paddingRight: "4px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "4px" }}>
         {loading ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "200px", color: "var(--text-secondary)" }}>
             <div className="spinner" style={{ marginBottom: "12px" }} />
@@ -287,7 +287,7 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
             width: "100%",
             justifyContent: "center",
             padding: "10px",
-            animation: "pulse 2s infinite",
+            boxShadow: "0 0 12px rgba(239, 68, 68, 0.2)",
           }}
         >
           <Trash2 size={14} style={{ marginRight: "6px" }} />
