@@ -85,7 +85,7 @@ impl Default for AppConfig {
                     "#非常重要".to_string(),
                 ],
             },
-            workspace_lang: "en".to_string(),
+            workspace_lang: "zh-full".to_string(),
             auto_rules: vec![
                 AutoRule {
                     name: "论文文档".to_string(),

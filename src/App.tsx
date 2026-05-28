@@ -224,8 +224,8 @@ export default function App() {
   const [workspaceDir, setWorkspaceDir] = useState<string>("C:\\Users\\Ming\\Desktop\\Ledger Pro Max\\Workspace");
   const workspaceDirRef = useRef(workspaceDir);
   useEffect(() => { workspaceDirRef.current = workspaceDir; }, [workspaceDir]);
-  const [workspaceLang, setWorkspaceLang] = useState<"zh" | "en">("zh");
-  const inboxName = workspaceLang === "en" ? "00Inbox" : "00收集箱";
+  const [workspaceLang, setWorkspaceLang] = useState<string>("zh-full");
+  const inboxName = workspaceLang.startsWith("en") ? "00Inbox" : "00收集箱";
   const [monitoredDirs, setMonitoredDirs] = useState<string>("C:\\Users\\Ming\\Downloads");
   const [backupDiskDir, setBackupDiskDir] = useState<string>("D:\\LedgerBackup\\Disk");
   const [backupCloudDir, setBackupCloudDir] = useState<string>("D:\\LedgerBackup\\Cloud");
@@ -336,19 +336,36 @@ export default function App() {
 
   const [chosenTags, setChosenTags] = useState<string[]>([]);
 
-  const standardDirsZh = [
+  const standardDirsZhFull = [
     "00收集箱", "01课程学习", "02课题研究", "03项目管理", "04代码仓库",
     "05学术论文", "06知识笔记", "07常用资源", "08演示汇报", "09个人简历",
     "10归档区", "99临时缓冲"
   ];
 
-  const standardDirsEn = [
+  const standardDirsZhMin = [
+    "00收集箱", "01课程学习", "02课题研究", "03项目管理",
+    "10归档区", "99临时缓冲"
+  ];
+
+  const standardDirsEnFull = [
     "00Inbox", "01Courses", "02Research", "03Projects", "04Code",
     "05Papers", "06Notes", "07Resources", "08Slides", "09Resumes",
     "10Archive", "99Sandbox"
   ];
 
-  const standardDirs = workspaceLang === "en" ? standardDirsEn : standardDirsZh;
+  const standardDirsEnMin = [
+    "00Inbox", "01Courses", "02Research", "03Projects",
+    "10Archive", "99Sandbox"
+  ];
+
+  const standardDirPresets: Record<string, string[]> = {
+    "zh-full": standardDirsZhFull,
+    "zh-min": standardDirsZhMin,
+    "en-full": standardDirsEnFull,
+    "en-min": standardDirsEnMin,
+  };
+
+  const standardDirs = standardDirPresets[workspaceLang] || standardDirsZhFull;
 
   useEffect(() => {
     if (!selectedCategory) return;
@@ -528,7 +545,7 @@ export default function App() {
     const initApp = async () => {
       let resolvedWorkspaceDir = workspaceDir;
       let resolvedMonitoredDirs = monitoredDirs;
-      let resolvedWorkspaceLang = "zh";
+      let resolvedWorkspaceLang = "zh-full";
       try {
         const config: any = await invoke("load_config");
         if (config) {
@@ -541,8 +558,8 @@ export default function App() {
           setBackupCloudDir(config.backup_cloud_dir || "");
           
           if (config.workspace_lang) {
-            resolvedWorkspaceLang = config.workspace_lang;
-            setWorkspaceLang(config.workspace_lang as any);
+            resolvedWorkspaceLang = config.workspace_lang || "zh-full";
+            setWorkspaceLang(resolvedWorkspaceLang);
           }
 
           // Fallback loaded theme to light/dark
@@ -565,7 +582,7 @@ export default function App() {
 
       // Initialize workspace & scan with the resolved (loaded) path — NOT the stale state value
       try {
-        const dirsToInit = resolvedWorkspaceLang === "en" ? standardDirsEn : standardDirsZh;
+        const dirsToInit = standardDirPresets[resolvedWorkspaceLang] || standardDirsZhFull;
         await invoke("init_workspace", { workspaceDir: resolvedWorkspaceDir, dirs: dirsToInit });
         await invoke("scan_workspace", { workspaceDir: resolvedWorkspaceDir });
         await handleRefreshData();
@@ -3802,15 +3819,18 @@ export default function App() {
                     <label>工作空间初始目录规格</label>
                     <select
                       value={workspaceLang}
-                      onChange={(e) => setWorkspaceLang(e.target.value as "zh" | "en")}
+                      onChange={(e) => setWorkspaceLang(e.target.value)}
                       className="input-field"
                       style={{ cursor: "pointer" }}
                     >
-                      <option value="zh">中文标准初始化规范 (以 "00收集箱" 命名目录)</option>
-                      <option value="en">English Standard Specification (Initializes as "00Inbox" directory)</option>
+                      <option value="zh-full">中文标准版 (12 个目录 — 课程/研究/项目/代码/论文/笔记/资源等)</option>
+                      <option value="zh-min">中文精简版 (6 个目录 — 课程/研究/项目/归档)</option>
+                      <option value="en-full">English Standard (12 dirs — Courses/Research/Projects/Code/Papers etc.)</option>
+                      <option value="en-min">English Minimal (6 dirs — Courses/Research/Projects/Archive)</option>
                     </select>
                     <div className="settings-status ok" style={{ marginTop: "6px" }}>
-                      选择在首次建立或重置工作空间时的标准目录语言：当前模式将创建 <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{workspaceLang === "en" ? "00Inbox" : "00收集箱"}</span> 等 12 个基础目录。
+                      当前模板将创建 <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{(standardDirPresets[workspaceLang] || standardDirsZhFull).length}</span> 个基础目录：
+                      <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{(standardDirPresets[workspaceLang] || standardDirsZhFull).slice(0, 6).join("、")}{ (standardDirPresets[workspaceLang] || standardDirsZhFull).length > 6 ? "..." : "" }</span>
                     </div>
                   </div>
                 </div>
