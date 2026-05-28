@@ -267,7 +267,8 @@ export default function App() {
   const projectSubdirs = ["docs", "src", "data", "assets", "models", "output", "test"];
 
   // State: Backup Panel
-  const [backupConsole, setBackupConsole] = useState<string[]>([]);
+  const [consoleLog, setConsoleLog] = useState<string[]>([]);
+  const [backupLog, setBackupLog] = useState<string[]>([]);
   const [backupHistory, setBackupHistory] = useState<BackupHistoryRecord[]>([]);
 
   // State: Global Status tags distribution
@@ -765,7 +766,12 @@ export default function App() {
 
   const addLog = (msg: string) => {
     const time = new Date().toLocaleTimeString();
-    setBackupConsole(prev => [`[${time}] ${msg}`, ...prev]);
+    setConsoleLog(prev => [`[${time}] ${msg}`, ...prev]);
+  };
+
+  const addBackupLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString();
+    setBackupLog(prev => [`[${time}] ${msg}`, ...prev]);
   };
 
   const handleAddOrUpdateRule = () => {
@@ -909,13 +915,13 @@ export default function App() {
   // Execute Backup
   const handleRunBackup = async (type: "disk" | "cloud") => {
     const targetDir = type === "disk" ? backupDiskDir : backupCloudDir;
-    addLog(`正在向 ${type === "disk" ? "硬盘" : "云盘"} 备份数据 (${targetDir})...`);
+    addBackupLog(`正在向 ${type === "disk" ? "硬盘" : "云盘"} 备份数据 (${targetDir})...`);
     try {
       const msg: string = await invoke("perform_backup", { backupType: type, workspaceDir, destDir: targetDir });
-      addLog(msg);
+      addBackupLog(msg);
       await handleRefreshData();
     } catch (err: any) {
-      addLog(`[错误] 备份失败: ${err}`);
+      addBackupLog(`[错误] 备份失败: ${err}`);
     }
   };
 
@@ -3468,10 +3474,10 @@ export default function App() {
                     display: "flex",
                     flexDirection: "column"
                   }}>
-                    {backupConsole.length === 0 ? (
+                    {backupLog.length === 0 ? (
                       <span style={{color: "#4b5563"}}>等待备份任务启动...</span>
                     ) : (
-                      [...backupConsole].reverse().map((log, idx) => (
+                      [...backupLog].reverse().map((log, idx) => (
                         <div key={idx} style={{marginBottom: "4px"}}>{log}</div>
                       ))
                     )}
