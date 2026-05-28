@@ -3421,11 +3421,10 @@ export default function App() {
           {activeTab === "backup" && (
             <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", height: "100%"}}>
               {/* Left Column: Backup Executions */}
-              <div style={{display: "flex", flexDirection: "column", gap: "20px"}}>
-                {/* 3-2-1 backup configuration cards */}
+              <div style={{display: "flex", flexDirection: "column", gap: "20px", minHeight: 0}}>
                 <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px"}}>
                   {/* Disk Backup card */}
-                  <div className="cyber-card" style={{display: "flex", flexDirection: "column", gap: "16px"}}>
+                  <div style={{display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", transition: "border-color 0.15s ease"}}>
                     <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
                       <div style={{background: "var(--color-primary-glow)", padding: "8px", borderRadius: "8px", color: "var(--color-primary)"}}>
                         <HardDrive size={22} />
@@ -3439,7 +3438,7 @@ export default function App() {
                   </div>
 
                   {/* Cloud Backup card */}
-                  <div className="cyber-card" style={{display: "flex", flexDirection: "column", gap: "16px"}}>
+                  <div style={{display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", transition: "border-color 0.15s ease"}}>
                     <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
                       <div style={{background: "var(--color-success-glow)", padding: "8px", borderRadius: "8px", color: "var(--color-success)"}}>
                         <Cloud size={22} />
@@ -3454,25 +3453,25 @@ export default function App() {
                 </div>
 
                 {/* Active backup terminal console */}
-                <div className="cyber-card" style={{flex: 1, display: "flex", flexDirection: "column", gap: "12px"}}>
-                  <h4 style={{fontSize: "13px", fontWeight: 600}}>💻 实时备份监控控制台</h4>
+                <div style={{flex: 1, display: "flex", flexDirection: "column", gap: "12px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", minHeight: 0}}>
+                  <h4 style={{fontSize: "13px", fontWeight: 600, flexShrink: 0}}>💻 实时备份监控控制台</h4>
                   <div style={{
-                    flex: 1, 
-                    background: "#0a0b10", 
-                    borderRadius: "10px", 
-                    padding: "16px", 
-                    fontFamily: "var(--mono)", 
-                    fontSize: "12px", 
-                    color: "#10b981", 
+                    flex: 1,
+                    minHeight: 0,
+                    background: "#0a0b10",
+                    borderRadius: "10px",
+                    padding: "16px",
+                    fontFamily: "var(--mono)",
+                    fontSize: "12px",
+                    color: "#10b981",
                     overflowY: "auto",
-                    maxHeight: "340px",
                     display: "flex",
-                    flexDirection: "column-reverse"
+                    flexDirection: "column"
                   }}>
                     {backupConsole.length === 0 ? (
                       <span style={{color: "#4b5563"}}>等待备份任务启动...</span>
                     ) : (
-                      backupConsole.map((log, idx) => (
+                      [...backupConsole].reverse().map((log, idx) => (
                         <div key={idx} style={{marginBottom: "4px"}}>{log}</div>
                       ))
                     )}
@@ -3481,10 +3480,10 @@ export default function App() {
               </div>
 
               {/* Right Column: Backup History */}
-              <div className="cyber-card" style={{display: "flex", flexDirection: "column", gap: "20px"}}>
-                <h3 className="card-title">📜 备份历史记录列表</h3>
-                
-                <div style={{display: "flex", flexDirection: "column", gap: "12px", flex: 1, overflowY: "auto", maxHeight: "calc(100vh - 220px)"}}>
+              <div style={{display: "flex", flexDirection: "column", gap: "20px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", minHeight: 0}}>
+                <h3 className="card-title" style={{flexShrink: 0}}>📜 备份历史记录列表</h3>
+
+                <div style={{display: "flex", flexDirection: "column", gap: "12px", flex: 1, minHeight: 0, overflowY: "auto"}}>
                   {backupHistory.length === 0 ? (
                     <div style={{display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-secondary)"}}>
                       <AlertTriangle size={32} style={{color: "var(--text-muted)", marginBottom: "12px"}} />
