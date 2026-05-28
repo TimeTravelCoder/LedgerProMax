@@ -2184,7 +2184,7 @@ export default function App() {
               {/* Right Panel: Smart naming & categorization */}
               <div>
                 {selectedInboxFile ? (
-                  <div style={{height: "100%", display: "flex", flexDirection: "column", gap: "16px", minHeight: 0, background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px"}}>
+                  <div style={{height: "100%", display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", overflowY: "auto"}}>
                       <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px", flexShrink: 0}}>
                         <div>
                           <h3 className="card-title" style={{margin: 0}}>🏷️ 智能归档与命名</h3>
@@ -2211,7 +2211,7 @@ export default function App() {
                         </button>
                       </div>
 
-                        <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "4px"}}>
+                        <div style={{display: "flex", flexDirection: "column", gap: "16px", paddingRight: "4px"}}>
                           {/* Name template */}
                           <div>
                             <label style={{fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "8px"}}>命名模版</label>
