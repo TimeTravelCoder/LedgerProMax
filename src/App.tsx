@@ -2185,13 +2185,12 @@ export default function App() {
               <div>
                 {selectedInboxFile ? (
                   <div style={{height: "100%", display: "flex", flexDirection: "column", gap: "16px", minHeight: 0, background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px"}}>
-                    <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, minHeight: 0}}>
-                      <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px", marginBottom: "4px", flexShrink: 0}}>
+                      <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px", flexShrink: 0}}>
                         <div>
                           <h3 className="card-title" style={{margin: 0}}>🏷️ 智能归档与命名</h3>
                           <p className="card-desc" style={{marginTop: "4px"}}>针对当前选中的落地文件进行快速模板化更名与智能分类。</p>
                         </div>
-                        <button 
+                        <button
                           onClick={() => setPreviewFile(selectedInboxFile)}
                           className="btn"
                           style={{
@@ -2212,7 +2211,7 @@ export default function App() {
                         </button>
                       </div>
 
-                        <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, overflowY: "auto", paddingRight: "4px"}}>
+                        <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "4px"}}>
                           {/* Name template */}
                           <div>
                             <label style={{fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "8px"}}>命名模版</label>
@@ -2394,7 +2393,6 @@ export default function App() {
                         <button className="btn btn-primary" onClick={handleArchiveFile} disabled={isArchiving} style={{width: "100%", justifyContent: "center", flexShrink: 0, opacity: isArchiving ? 0.7 : 1}}>
                           {isArchiving ? "⏳ 归档中..." : "📁 执行智能归档搬运"}
                         </button>
-                      </div>
                   </div>
                 ) : (
                   <div className="cyber-card" style={{maxHeight: "240px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "2px dashed var(--border-light)", color: "var(--text-secondary)", padding: "32px 24px", textAlign: "center"}}>
