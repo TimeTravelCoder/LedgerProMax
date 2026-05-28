@@ -1,73 +1,234 @@
-# React + TypeScript + Vite
+# 👑 Ledger Pro Max
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**文档、归档、备份的专业控制台** — 面向高强度学习、项目资料与长期数字资产管理，把自动收集、AI 标签、快速预览、查重清理与 3-2-1 备份整合到同一个工作流中。
 
-Currently, two official plugins are available:
+## 技术栈
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| 层级 | 技术 |
+|------|------|
+| 桌面框架 | [Tauri v2](https://v2.tauri.app/) (Rust) |
+| 前端 | React 19 + TypeScript 6 + Vite 8 |
+| UI 图标 | [Lucide React](https://lucide.dev/) |
+| 数据库 | SQLite (rusqlite, bundled) |
+| 文件监控 | notify (Rust) |
+| 压缩归档 | zip (Rust, deflate-miniz) |
+| 编码处理 | encoding_rs (GBK/UTF-8 自动检测) |
+| 哈希校验 | SHA-256 (sha2) |
+| 时间处理 | chrono |
+| Windows 集成 | winreg (注册表读取桌面路径) |
 
-## React Compiler
+## 核心功能
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 🧠 系统数据看板
 
-## Expanding the ESLint configuration
+一站式指挥台，实时展示工作区全景：
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Pro 信号网格** — 收集箱待处理数、AI 归档覆盖率、3-2-1 备份评分、工作区文件总量，一目了然
+- **指标卡片** — 文件总数、存储容量、已用标签数、近 7 天整理量
+- **标签热度分布** — 横向条形图展示前 5 热门标签，点击即可跳转筛选
+- **近 7 天整理趋势** — SVG 贝塞尔曲线图表，可交互悬停查看每日数据
+- **桌面整理评估** — 监控桌面普通文件数，超标预警
+- **3-2-1 备份健康度** — 自动评估备份安全指数
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### 📥 智能收集箱 (Pro Inbox)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- **拖拽导入** — 支持从外部拖拽文件直接落入收集箱
+- **文件监控** — 监听下载目录等指定文件夹，新文件自动弹窗通知，一键导入
+- **桌面一键清理** — 扫描并迁移桌面普通文件至收集箱
+- **AI 标签推荐** — 基于文件名与备注的语义分析，自动推荐最匹配的标签
+- **智能规则匹配** — 根据扩展名和关键词自动建议归档目标目录
+- **命名模板** — 支持自定义文件重命名模板（`{date}_{topic}_{version}_{status}` 等变量替换）
+- **批量操作** — 多文件同时导入收集箱
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 📂 分类工作空间 (Pro Workspace)
+
+预置 12 个标准目录，覆盖全场景：
+
+| 编号 | 目录 | 用途 |
+|------|------|------|
+| 00 | 收集箱 | 待整理文件的临时存放区 |
+| 01 | 课程学习 | 课件、讲义、课程笔记 |
+| 02 | 课题研究 | 研究资料、实验数据 |
+| 03 | 项目管理 | 项目文档、源码仓库 |
+| 04 | 代码仓库 | 脚本、代码片段 |
+| 05 | 学术论文 | 论文 PDF、参考文献 |
+| 06 | 知识笔记 | 个人知识库、读书笔记 |
+| 07 | 常用资源 | 素材、模板、工具 |
+| 08 | 演示汇报 | PPT、演讲稿 |
+| 09 | 个人简历 | 简历、证书扫描件 |
+| 10 | 归档区 | 已完成项目的 ZIP 保险箱 |
+| 99 | 临时缓冲 | 临时文件中转 |
+
+**工作空间功能：**
+
+- **拼音首字母搜索** — 输入拼音首字母即可搜索中文文件名（如输入 `bg` 匹配 `报告.pdf`）
+- **多维筛选** — 按分类目录、标签、文件状态、扩展名类型组合过滤
+- **列表/网格视图** — 两种浏览模式自由切换
+- **文件预览** — 内嵌预览面板，支持 UTF-8/GBK 自动编码检测
+- **元数据编辑** — 修改文件描述、标签
+- **文件重命名** — 支持跨目录移动 + 大小写重命名
+- **右键菜单** — 快速操作：打开、删除、重命名
+- **项目初始化** — 一键创建标准化项目目录结构（docs/src/data/assets/models/output/test）
+- **文件夹创建** — 安全路径校验，限制 4 级目录深度
+- **ZIP 归档打包** — 多选文件压缩至归档区，自动校验完整性，自动清理源文件
+- **系统打开** — 调用系统默认程序打开文件
+
+### 🛡️ 3-2-1 备份管家 (Pro Backup)
+
+遵循国际通行的 3-2-1 备份规范：
+
+- **3** 份数据副本（1 份工作原件 + 2 份备份）
+- **2** 种不同存储介质（本地磁盘 + 外置硬盘/云盘同步目录）
+- **1** 份异地归档（云盘备份目录）
+
+**备份功能：**
+
+- **增量备份** — 仅复制修改过的文件，避免全量扫描
+- **哈希完整性校验** — 每个备份文件计算 SHA-256，确保数据一致
+- **元数据保留** — 备份文件保持原始修改时间
+- **循环备份保护** — 自动拦截将备份目标设在 workspace 内部
+- **备份历史记录** — 完整日志，含备份时间、文件数、字节数、状态
+- **介质检测** — 备份前检测目标驱动器是否在线
+
+### 🔍 智能查重清理 (Pro Cleaner)
+
+- **文件名查重** — 按文件名（忽略大小写）检测重复文件
+- **文件大小查重** — 按文件大小分组
+- **SHA-256 哈希查重** — 精确内容校验，先按大小预分组再计算哈希，优化性能
+- **一键删除** — 勾选重复文件批量清理
+
+### ⚙️ 控制面板 (Pro Control)
+
+- **路径管理** — 可视化配置工作空间、监控目录、磁盘备份、云备份路径
+- **路径校验** — 实时检测目录存在性、可写性、路径合法性
+- **标签系统** — 三级标签体系（主标签/副标签/状态标签），支持增删改查
+- **自动规则** — 可配置的文件分类规则（关键词 + 扩展名 → 目标目录）
+- **规则测试** — 输入文件名实时预览规则匹配结果
+- **命名模板** — 自定义文件重命名模板
+- **主题切换** — 赛博暗黑 / 极简明亮 双主题
+- **持久化配置** — 所有设置保存至 `~/.config/Ledger/.config.json`
+
+## 项目结构
+
+```
+promax/
+├── src/                          # React 前端
+│   ├── App.tsx                   # 主应用组件（4292 行，完整业务逻辑）
+│   ├── App.css                   # 全局样式
+│   ├── main.tsx                  # 入口文件
+│   ├── index.css                 # 基础样式
+│   ├── assets/                   # 静态资源
+│   └── components/
+│       ├── DuplicateFinder.tsx   # 查重清理面板
+│       ├── PreviewPanel.tsx      # 文件预览面板
+│       ├── ZipArchiveModal.tsx   # ZIP 归档弹窗
+│       └── liquid-glass/        # 液态玻璃 UI 效果
+├── src-tauri/                    # Rust 后端
+│   ├── src/
+│   │   ├── main.rs              # 入口
+│   │   ├── lib.rs               # Tauri 命令注册 & 路由
+│   │   ├── db.rs                # SQLite 数据库管理
+│   │   ├── file_manager.rs      # 文件操作与工作区管理
+│   │   ├── backup.rs            # 3-2-1 备份引擎
+│   │   ├── semantic.rs          # 语义分析与标签推荐
+│   │   ├── watcher.rs           # 文件系统监控
+│   │   └── config_manager.rs    # 配置持久化
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   ├── icons/                   # 应用图标（多尺寸）
+│   └── capabilities/
+├── public/                       # 公共静态资源
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+└── eslint.config.js
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 快速开始
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### 环境要求
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- **Node.js** >= 18
+- **Rust** >= 1.77.2
+- **Windows** 10/11（目前仅针对 Windows 平台优化，macOS/Linux 部分功能可用）
+
+### 安装依赖
+
+```bash
+npm install
 ```
+
+### 开发模式
+
+```bash
+npm run tauri dev
+```
+
+这将同时启动 Vite 开发服务器（前端热更新）和 Tauri 桌面窗口。
+
+### 生产构建
+
+```bash
+npm run tauri build
+```
+
+构建产物位于 `src-tauri/target/release/`。
+
+## Tauri 命令清单
+
+前端通过 `invoke` 调用以下 Rust 命令：
+
+| 命令 | 功能 |
+|------|------|
+| `init_workspace` | 初始化工作空间目录结构 |
+| `init_project` | 创建标准化项目目录 |
+| `create_folder` | 新建文件夹（含安全校验） |
+| `scan_workspace` | 扫描工作区文件并同步数据库 |
+| `search_files` | 多条件文件搜索（关键词/标签/状态） |
+| `update_file_tags` | 更新文件标签 |
+| `update_file_description` | 更新文件描述 |
+| `delete_file` | 删除文件（物理+数据库） |
+| `rename_file` | 重命名文件（支持跨目录移动） |
+| `organize_file` | 归档整理文件（移动+重命名+元数据） |
+| `get_desktop_summary` | 获取桌面文件统计 |
+| `get_desktop_files` | 列出桌面普通文件 |
+| `clean_desktop` | 一键清理桌面文件至收集箱 |
+| `get_tag_distribution` | 获取标签分布统计 |
+| `get_recent_files` | 获取近期文件 |
+| `recommend_tags` | AI 标签推荐 |
+| `perform_backup` | 执行增量备份（disk/cloud） |
+| `get_backup_history` | 获取备份历史 |
+| `start_watching` | 启动文件系统监控 |
+| `stop_watching` | 停止文件系统监控 |
+| `suggest_rule_target` | 规则匹配建议目标目录 |
+| `load_config` | 加载持久化配置 |
+| `save_config` | 保存配置 |
+| `validate_path` | 路径合法性校验 |
+| `read_file_content` | 读取文件内容（自动编码检测） |
+| `archive_to_zip` | 多文件压缩归档 |
+| `find_duplicates` | 查重（filename/size/hash） |
+| `open_in_system` | 系统默认程序打开文件 |
+| `select_directory` | Windows 原生目录选择对话框 |
+
+## 安全设计
+
+- **工作区沙箱** — 所有文件操作限制在 workspace 目录内，路径穿越自动拦截
+- **删除保护** — 禁止删除工作区根目录，空路径或 `.` / `..` 路径自动拒绝
+- **备份防循环** — 检测备份目标是否位于工作区内，防止无限递归备份
+- **哈希完整性** — 备份文件与源文件 SHA-256 比对，确保数据一致
+- **目录深度限制** — 最大 4 级目录层级，防止结构失控
+
+## 设计理念
+
+Ledger Pro Max 遵循 **PARA 方法论**的核心理念，将数字生活分为：
+
+- **Projects（项目）** — 有明确截止日期的任务集合
+- **Areas（领域）** — 需要长期维护的责任领域
+- **Resources（资源）** — 未来可能用到的参考资料
+- **Archives（归档）** — 已完成或不活跃的内容
+
+结合 **3-2-1 备份策略**和 **AI 辅助标签**，构建一个从收集、整理、查重到备份的完整文件生命周期管理闭环。
+
+## License
+
+MIT
