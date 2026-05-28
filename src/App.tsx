@@ -270,6 +270,7 @@ export default function App() {
   const [consoleLog, setConsoleLog] = useState<string[]>([]);
   const [backupLog, setBackupLog] = useState<string[]>([]);
   const [backupHistory, setBackupHistory] = useState<BackupHistoryRecord[]>([]);
+  const [isArchiving, setIsArchiving] = useState(false);
 
   // State: Global Status tags distribution
   const [tagDistribution, setTagDistribution] = useState<Record<string, number>>({});
@@ -483,7 +484,8 @@ export default function App() {
       const importedFile = inboxList.find(f => f.filepath === finalRel);
       if (importedFile) {
         setSelectedInboxFile(importedFile);
-        const stem = filename.substring(0, filename.lastIndexOf("."));
+        const dotIdx2 = filename.lastIndexOf(".");
+        const stem = dotIdx2 > 0 ? filename.substring(0, dotIdx2) : filename;
         const cleanStem = stem.replace(/ /g, "_").replace(/-/g, "_");
         setTopicName(cleanStem);
       }
@@ -762,7 +764,7 @@ export default function App() {
       };
       updateSuggestions();
     }
-  }, [selectedInboxFile, remark]);
+  }, [selectedInboxFile]);
 
   const addLog = (msg: string) => {
     const time = new Date().toLocaleTimeString();
@@ -950,12 +952,13 @@ export default function App() {
 
   // Archive & Categorize Inbox File
   const handleArchiveFile = async () => {
-    if (!selectedInboxFile) return;
+    if (!selectedInboxFile || isArchiving) return;
+    setIsArchiving(true);
 
     try {
       const formattedName = getFormattedName(selectedInboxFile.filename.toString());
       const destRel = `${targetCategory}/${formattedName}`;
-      
+
       const finalRel: string = await invoke("organize_file", {
         workspaceDir,
         srcPath: `${workspaceDir}/${selectedInboxFile.filepath}`,
@@ -963,18 +966,18 @@ export default function App() {
         newFilename: formattedName
       });
 
-      // Update description & tags in DB
       const finalTags = [...chosenTags];
       if (fileStatus && !finalTags.includes(fileStatus)) {
         finalTags.push(fileStatus);
       }
-      
+
       await invoke("update_file_tags", { workspaceDir, filepath: finalRel, tags: finalTags });
       if (remark.trim() !== "") {
         await invoke("update_file_description", { workspaceDir, filepath: finalRel, description: remark.trim() });
       }
 
       addLog(`文档归档成功: ${selectedInboxFile.filename} -> ${destRel}`);
+      showToast("归档成功！", "success");
       setSelectedInboxFile(null);
       setTopicName("");
       setRemark("");
@@ -982,6 +985,9 @@ export default function App() {
       await handleRefreshData();
     } catch (err: any) {
       addLog(`[错误] 归档失败: ${err}`);
+      showToast(`归档失败: ${err}`, "error");
+    } finally {
+      setIsArchiving(false);
     }
   };
 
@@ -2064,8 +2070,12 @@ export default function App() {
                   <div>
                     <h3 className="card-title"><Sparkles size={18} className="text-primary" /> 本地桌面健康度</h3>
                     <p className="card-desc" style={{marginTop: "6px"}}>
-                      发现桌面有 <strong style={{color: "var(--color-warning)"}}>{desktopSummary.normal_files}</strong> 个未归类文档，
-                      <strong style={{color: "var(--color-primary)"}}>{desktopSummary.folders}</strong> 个文件夹。
+                      {desktopSummary.normal_files === 0 ? (
+                        <>桌面非常整洁，暂无未归类文档 ✨</>
+                      ) : (
+                        <>发现桌面有 <strong style={{color: "var(--color-warning)"}}>{desktopSummary.normal_files}</strong> 个未归类文档，
+                      <strong style={{color: "var(--color-primary)"}}>{desktopSummary.folders}</strong> 个文件夹。</>
+                      )}
                     </p>
                   </div>
                   <button className="btn btn-primary" onClick={handleCleanDesktop}>
@@ -2089,7 +2099,8 @@ export default function App() {
                           key={idx}
                           onClick={() => {
                             setSelectedInboxFile(file);
-                            setTopicName(file.filename.toString().substring(0, file.filename.toString().lastIndexOf(".")));
+                            const dotIdx = file.filename.toString().lastIndexOf(".");
+                            setTopicName(dotIdx > 0 ? file.filename.toString().substring(0, dotIdx) : file.filename.toString());
                             setInboxRightTab("archive");
                           }}
                           onDoubleClick={() => setPreviewFile(file)}
@@ -2130,7 +2141,7 @@ export default function App() {
                               {(file.tags ? String(file.tags).split(",").filter(t => t.trim()) : []).slice(0, 2).map((tag, ti) => {
                                 const tagVal = tag.trim().replace(/^#/, "");
                                 if (!tagVal) return null;
-                                const tagColors: Record<string, string> = { completed: "#34d399", done: "#34d399", active: "#fbbf24", pending: "#f87171", important: "#a78bfa" };
+                                const tagColors: Record<string, string> = { completed: "#34d399", done: "#34d399", active: "#fbbf24", pending: "#f87171", important: "#a78bfa", 已完成: "#34d399", 进行中: "#fbbf24", 待处理: "#f87171", 非常重要: "#a78bfa" };
                                 const lower = tagVal.toLowerCase();
                                 const tagColor = tagColors[lower] || "#818cf8";
                                 return (
@@ -2173,8 +2184,8 @@ export default function App() {
               {/* Right Panel: Smart naming & categorization */}
               <div>
                 {selectedInboxFile ? (
-                  <div className="cyber-card" style={{height: "100%", display: "flex", flexDirection: "column", gap: "16px"}}>
-                    <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, overflow: "hidden"}}>
+                  <div style={{height: "100%", display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px"}}>
+                    <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, minHeight: 0, overflow: "hidden"}}>
                       <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px", marginBottom: "4px", flexShrink: 0}}>
                         <div>
                           <h3 className="card-title" style={{margin: 0}}>🏷️ 智能归档与命名</h3>
@@ -2339,7 +2350,7 @@ export default function App() {
                                     style={{cursor: "pointer", textTransform: "none", fontSize: "11px", display: "flex", alignItems: "center", gap: "4px"}}
                                   >
                                     {tag}
-                                    <X size={10} onClick={() => setChosenTags(chosenTags.filter(t => t !== tag))} />
+                                    <X size={13} onClick={() => setChosenTags(chosenTags.filter(t => t !== tag))} />
                                   </span>
                                 ))}
                               </div>
@@ -2380,8 +2391,8 @@ export default function App() {
                           <div style={{fontSize: "13px", wordBreak: "break-all", fontWeight: 600, color: "var(--color-primary)"}}>{getFormattedName(selectedInboxFile.filename.toString())}</div>
                         </div>
 
-                        <button className="btn btn-primary" onClick={handleArchiveFile} style={{width: "100%", justifyContent: "center", flexShrink: 0}}>
-                          📁 执行智能归档搬运
+                        <button className="btn btn-primary" onClick={handleArchiveFile} disabled={isArchiving} style={{width: "100%", justifyContent: "center", flexShrink: 0, opacity: isArchiving ? 0.7 : 1}}>
+                          {isArchiving ? "⏳ 归档中..." : "📁 执行智能归档搬运"}
                         </button>
                       </div>
                   </div>
