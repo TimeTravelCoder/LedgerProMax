@@ -2050,11 +2050,11 @@ export default function App() {
 
           {/* 1. INBOX TAB */}
           {activeTab === "inbox" && (
-            <div style={{display: "grid", gridTemplateColumns: "1fr 340px", gap: "20px", height: "100%"}}>
+            <div style={{display: "grid", gridTemplateColumns: "1fr 380px", gap: "20px", height: "100%"}}>
               {/* Left Panel: Desktop clean & Inbox List */}
               <div style={{display: "flex", flexDirection: "column", gap: "20px"}}>
                 {/* Desktop Summary Panel */}
-                <div className="cyber-card" style={{display: "flex", justifyContent: "space-between", alignItems: "center", background: "linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%)"}}>
+                <div className="cyber-card" style={{display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", background: "linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%)"}}>
                   <div>
                     <h3 className="card-title"><Sparkles size={18} className="text-primary" /> 本地桌面健康度</h3>
                     <p className="card-desc" style={{marginTop: "6px"}}>
@@ -2068,8 +2068,8 @@ export default function App() {
                 </div>
 
                 {/* Inbox files List */}
-                <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1}}>
-                  <h3 className="card-title">📥 收集箱待整理文件 ({inboxFiles.length})</h3>
+                <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, minHeight: 0}}>
+                  <h3 className="card-title" style={{flexShrink: 0}}>📥 收集箱待整理文件 ({inboxFiles.length})</h3>
                   {inboxFiles.length === 0 ? (
                     <div style={{display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, border: "2px dashed var(--border-light)", borderRadius: "16px", padding: "40px", color: "var(--text-secondary)"}}>
                       <CheckCircle2 size={48} style={{color: "var(--color-success)", marginBottom: "16px"}} />
@@ -2077,9 +2077,9 @@ export default function App() {
                       <p style={{fontSize: "13px", color: "var(--text-muted)", marginTop: "4px"}}>您可以从外部拖入文件或将文件放置于监听文件夹中。</p>
                     </div>
                   ) : (
-                    <div style={{display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", maxHeight: "calc(100vh - 360px)", paddingRight: "6px"}}>
+                    <div style={{display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1, minHeight: 0, paddingRight: "6px"}}>
                       {inboxFiles.map((file, idx) => (
-                        <div 
+                        <div
                           key={idx}
                           onClick={() => {
                             setSelectedInboxFile(file);
@@ -2087,33 +2087,74 @@ export default function App() {
                             setInboxRightTab("archive");
                           }}
                           onDoubleClick={() => setPreviewFile(file)}
-                          className={`cyber-card`}
                           style={{
-                            padding: "14px 18px", 
+                            padding: "12px 16px",
                             borderRadius: "10px",
-                            cursor: "pointer", 
-                            display: "flex", 
-                            alignItems: "center", 
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
                             justifyContent: "space-between",
+                            border: "1px solid",
                             borderColor: selectedInboxFile?.filepath === file.filepath ? "var(--color-primary)" : "var(--border-light)",
-                            background: selectedInboxFile?.filepath === file.filepath ? "var(--color-primary-glow)" : "var(--bg-secondary)"
+                            background: selectedInboxFile?.filepath === file.filepath ? "var(--color-primary-glow)" : "var(--bg-secondary)",
+                            transition: "border-color 0.15s ease, background 0.15s ease"
+                          }}
+                          onMouseEnter={(e) => {
+                            if (selectedInboxFile?.filepath !== file.filepath) {
+                              e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)";
+                              e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (selectedInboxFile?.filepath !== file.filepath) {
+                              e.currentTarget.style.borderColor = "var(--border-light)";
+                              e.currentTarget.style.background = "var(--bg-secondary)";
+                            }
                           }}
                         >
                           <div style={{display: "flex", alignItems: "center", gap: "14px", overflow: "hidden", minWidth: 0, flex: 1}}>
-                            {getFileIcon(file.filename.toString(), 36)}
+                            {getFileIcon(file.filename.toString(), 34)}
                             <div style={{overflow: "hidden", minWidth: 0, flex: 1}}>
                               <h4 style={{margin: 0, fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: "1.4"}}>{file.filename}</h4>
-                              <p style={{margin: 0, fontSize: "12px", color: "var(--text-muted)", marginTop: "4px", paddingBottom: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: "1.4"}}>{file.filepath}</p>
+                              <p style={{margin: 0, fontSize: "11px", color: "var(--text-muted)", marginTop: "3px", paddingBottom: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: "1.4"}}>{file.filepath}</p>
                             </div>
                           </div>
-                          <div style={{display: "flex", alignItems: "center", gap: "16px", flexShrink: 0}}>
-                            <span style={{fontSize: "12px", color: "var(--text-secondary)"}}>{formatSize(file.file_size)}</span>
-                            <button 
-                              className="btn" 
+                          <div style={{display: "flex", alignItems: "center", gap: "10px", flexShrink: 0}}>
+                            <div style={{display: "flex", flexWrap: "wrap", gap: "3px", maxWidth: "120px", justifyContent: "flex-end"}}>
+                              {(file.tags ? String(file.tags).split(",").filter(t => t.trim()) : []).slice(0, 2).map((tag, ti) => {
+                                const tagVal = tag.trim().replace(/^#/, "");
+                                if (!tagVal) return null;
+                                const tagColors: Record<string, string> = { completed: "#34d399", done: "#34d399", active: "#fbbf24", pending: "#f87171", important: "#a78bfa" };
+                                const lower = tagVal.toLowerCase();
+                                const tagColor = tagColors[lower] || "#818cf8";
+                                return (
+                                  <span key={ti} style={{
+                                    display: "inline-block",
+                                    padding: "2px 6px",
+                                    borderRadius: "99px",
+                                    background: `${tagColor}22`,
+                                    color: tagColor,
+                                    fontSize: "10px",
+                                    fontWeight: 600,
+                                    whiteSpace: "nowrap",
+                                    maxWidth: "64px",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    lineHeight: "1.3"
+                                  }}>{tagVal}</span>
+                                );
+                              })}
+                            </div>
+                            <span style={{fontSize: "12px", color: "var(--text-secondary)", whiteSpace: "nowrap"}}>{formatSize(file.file_size)}</span>
+                            <span style={{width: "1px", height: "18px", background: "var(--border-light)", flexShrink: 0}} />
+                            <button
+                              className="btn"
                               onClick={(e) => { e.stopPropagation(); handleDeleteFile(file.filepath.toString()); }}
-                              style={{padding: "6px", color: "var(--color-danger)", background: "transparent", border: "none"}}
+                              style={{padding: "4px", color: "var(--color-danger)", background: "transparent", border: "none", opacity: 0.55}}
+                              onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.55"; }}
                             >
-                              <Trash2 size={16} />
+                              <Trash2 size={15} />
                             </button>
                           </div>
                         </div>
@@ -2339,7 +2380,7 @@ export default function App() {
                       </div>
                   </div>
                 ) : (
-                  <div className="cyber-card" style={{height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "2px dashed var(--border-light)", color: "var(--text-secondary)", padding: "40px", textAlign: "center"}}>
+                  <div className="cyber-card" style={{maxHeight: "240px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "2px dashed var(--border-light)", color: "var(--text-secondary)", padding: "32px 24px", textAlign: "center"}}>
                     <Layers size={40} style={{color: "var(--text-muted)", marginBottom: "16px"}} />
                     <h3 style={{fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px"}}>智能推荐面板</h3>
                     <p style={{fontSize: "13px", lineHeight: "1.4"}}>请在左侧列表选中任意待处理文件，AI 语义算法将立即在此为您生成命名、同义推荐词及最优分类路径。</p>
