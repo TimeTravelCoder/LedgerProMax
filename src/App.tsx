@@ -2392,7 +2392,7 @@ export default function App() {
 
           {/* 2. WORKSPACE TAB */}
           {activeTab === "workspace" && (
-            <div style={{display: "grid", gridTemplateColumns: "220px minmax(0, 1fr) 290px", gap: "16px", height: "100%"}}>
+            <div style={{display: "grid", gridTemplateColumns: "220px minmax(0, 1fr) 320px", gap: "16px", height: "100%"}}>
               {/* Left Column: Folders / Categories */}
               <div className="workspace-left-rail">
                 <div className="workspace-tree-header">
@@ -2517,12 +2517,10 @@ export default function App() {
                       transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)"
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-2px)";
                       e.currentTarget.style.boxShadow = theme === "light" ? "0 6px 16px rgba(59, 130, 246, 0.08)" : "0 6px 16px rgba(59, 130, 246, 0.16)";
                       e.currentTarget.style.borderColor = "rgba(59, 130, 246, 0.35)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "none";
                       e.currentTarget.style.boxShadow = "none";
                       e.currentTarget.style.borderColor = "var(--border-light)";
                     }}
@@ -2553,12 +2551,10 @@ export default function App() {
                       transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)"
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-2px)";
                       e.currentTarget.style.boxShadow = theme === "light" ? "0 6px 16px rgba(16, 185, 129, 0.08)" : "0 6px 16px rgba(16, 185, 129, 0.16)";
                       e.currentTarget.style.borderColor = "rgba(16, 185, 129, 0.35)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "none";
                       e.currentTarget.style.boxShadow = "none";
                       e.currentTarget.style.borderColor = "var(--border-light)";
                     }}
@@ -2606,7 +2602,7 @@ export default function App() {
               </div>
 
               {/* Middle Column: Files search & results list */}
-              <div style={{display: "flex", flexDirection: "column", gap: "20px"}}>
+              <div style={{display: "flex", flexDirection: "column", gap: "20px", minHeight: 0, flex: 1}}>
                 {/* Search Bar & Multi-select Toggle */}
                 <div style={{display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap"}}>
                   <div style={{
@@ -2624,7 +2620,7 @@ export default function App() {
                     <Search size={18} style={{position: "absolute", left: "16px", color: "var(--text-muted)"}} />
                     <input 
                       type="text"
-                      placeholder="支持输入中文字、拼音首字母模糊检索文件名/备注/标签... (多关键词用空格隔开)"
+                      placeholder="搜索文件名、标签、备注...（支持拼音首字母 / 空格分隔多关键词）"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       style={{
@@ -2795,7 +2791,7 @@ export default function App() {
                   </select>
 
                   {/* Hot tags list */}
-                  <div style={{display: "flex", gap: "8px", overflowX: "auto", flex: 1, paddingBottom: "4px"}}>
+                  <div style={{display: "flex", gap: "8px", flexWrap: "wrap", flex: 1, paddingBottom: "4px"}}>
                     {Object.entries(tagDistribution).slice(0, 5).map(([tag, count], idx) => {
                       const isActive = selectedTagsFilter.includes(tag);
                       return (
@@ -2834,7 +2830,7 @@ export default function App() {
                 </div>
 
                 {/* Workspace Files List */}
-                <div style={{display: "flex", flexDirection: "column", gap: "10px", flex: 1, overflowY: "auto", maxHeight: "calc(100vh - 280px)"}}>
+                <div style={{display: "flex", flexDirection: "column", gap: "10px", flex: 1, minHeight: 0, overflowY: "auto"}}>
                   {workspaceFiles.length === 0 ? (
                     <div style={{
                       display: "flex", 
@@ -2922,18 +2918,32 @@ export default function App() {
                               file: file
                             });
                           }}
-                          className={`cyber-card`}
                           onDoubleClick={() => setPreviewFile(file)}
                           style={{
-                            padding: "14px 18px", 
-                            cursor: "pointer", 
-                            display: "flex", 
-                            alignItems: "center", 
+                            padding: "12px 16px",
+                            borderRadius: "10px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
                             justifyContent: "space-between",
+                            border: "1px solid",
                             borderColor: selectedWorkspaceFile?.filepath === file.filepath ? "var(--color-primary)" : "var(--border-light)",
-                            background: isChecked 
-                              ? (theme === "light" ? "rgba(124, 58, 237, 0.08)" : "rgba(168, 85, 247, 0.1)") 
-                              : (selectedWorkspaceFile?.filepath === file.filepath ? "var(--color-primary-glow)" : "var(--bg-secondary)")
+                            background: isChecked
+                              ? (theme === "light" ? "rgba(124, 58, 237, 0.08)" : "rgba(168, 85, 247, 0.1)")
+                              : (selectedWorkspaceFile?.filepath === file.filepath ? "var(--color-primary-glow)" : "var(--bg-secondary)"),
+                            transition: "border-color 0.15s ease, background 0.15s ease"
+                          }}
+                          onMouseEnter={(e) => {
+                            if (selectedWorkspaceFile?.filepath !== file.filepath && !isChecked) {
+                              e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)";
+                              e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (selectedWorkspaceFile?.filepath !== file.filepath && !isChecked) {
+                              e.currentTarget.style.borderColor = "var(--border-light)";
+                              e.currentTarget.style.background = "var(--bg-secondary)";
+                            }
                           }}
                         >
                           <div style={{display: "flex", alignItems: "center", gap: "12px", overflow: "hidden", minWidth: 0, flex: 1}}>
@@ -2998,22 +3008,34 @@ export default function App() {
                                 file: file
                               });
                             }}
-                            className="cyber-card"
                             onDoubleClick={() => setPreviewFile(file)}
                             style={{
-                              padding: "16px", 
-                              cursor: "pointer", 
-                              display: "flex", 
+                              padding: "16px",
+                              cursor: "pointer",
+                              display: "flex",
                               flexDirection: "column",
-                              alignItems: "center", 
+                              alignItems: "center",
                               position: "relative",
                               borderRadius: "14px",
-                              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                              border: "1px solid",
                               borderColor: isSelected ? "var(--color-primary)" : "var(--border-light)",
-                              background: isChecked 
-                                ? (theme === "light" ? "rgba(124, 58, 237, 0.08)" : "rgba(168, 85, 247, 0.1)") 
+                              background: isChecked
+                                ? (theme === "light" ? "rgba(124, 58, 237, 0.08)" : "rgba(168, 85, 247, 0.1)")
                                 : (isSelected ? "var(--color-primary-glow)" : "var(--bg-secondary)"),
-                              boxShadow: isSelected ? "0 4px 14px rgba(99, 102, 241, 0.15)" : "none"
+                              boxShadow: isSelected ? "0 4px 14px rgba(99, 102, 241, 0.15)" : "none",
+                              transition: "border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease"
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSelected && !isChecked) {
+                                e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)";
+                                e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected && !isChecked) {
+                                e.currentTarget.style.borderColor = "var(--border-light)";
+                                e.currentTarget.style.background = "var(--bg-secondary)";
+                              }
                             }}
                           >
                             {/* Checkbox indicator in multi-select mode */}
@@ -3128,7 +3150,7 @@ export default function App() {
                               display: "flex", 
                               flexWrap: "wrap", 
                               gap: "6px", 
-                              maxHeight: "100px", 
+                              maxHeight: "140px",
                               overflowY: "auto", 
                               padding: "6px",
                               borderRadius: "8px",
@@ -3385,7 +3407,7 @@ export default function App() {
                     )}
                   </div>
                 ) : (
-                  <div className="cyber-card" style={{height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "2px dashed var(--border-light)", color: "var(--text-secondary)", padding: "40px", textAlign: "center"}}>
+                  <div className="cyber-card" style={{maxHeight: "240px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "2px dashed var(--border-light)", color: "var(--text-secondary)", padding: "32px 24px", textAlign: "center"}}>
                     <FileText size={40} style={{color: "var(--text-muted)", marginBottom: "16px"}} />
                     <h3 style={{fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px"}}>文档详细信息</h3>
                     <p style={{fontSize: "13px", lineHeight: "1.4"}}>请在中间列表选择任意文档，即可在此查看其详细的备份状态、历史标签、手动备注并执行路径复制等管理操作。</p>
