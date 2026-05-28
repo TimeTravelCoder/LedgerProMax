@@ -392,6 +392,49 @@ fn select_directory() -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+fn read_docx_text(workspace_dir: String, filepath: String) -> Result<String, String> {
+    let abs_path = FileManager::safe_workspace_path(&filepath, &workspace_dir)?;
+    if !abs_path.exists() {
+        return Err("文件不存在。".to_string());
+    }
+
+    let file = fs::File::open(&abs_path).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|_| "无法解析 .docx 文件，该文件可能已损坏。".to_string())?;
+
+    let doc_xml = archive.by_name("word/document.xml").map_err(|_| "不是有效的 .docx 文件，缺少 word/document.xml。".to_string())?;
+    use std::io::Read;
+    let xml_text = {
+        let mut reader = std::io::BufReader::new(doc_xml);
+        let mut buf = String::new();
+        reader.read_to_string(&mut buf).map_err(|e| e.to_string())?;
+        buf
+    };
+
+    // Extract text from <w:t> elements using regex
+    let re = regex::Regex::new(r"<w:t[^>]*>([^<]*)</w:t>").map_err(|e| e.to_string())?;
+    let mut paragraphs = Vec::new();
+
+    // Split by paragraph markers to preserve paragraph breaks
+    for part in xml_text.split("</w:p>") {
+        let mut para_text = String::new();
+        for cap in re.captures_iter(part) {
+            if let Some(text) = cap.get(1) {
+                para_text.push_str(text.as_str());
+            }
+        }
+        if !para_text.trim().is_empty() {
+            paragraphs.push(para_text.trim().to_string());
+        }
+    }
+
+    if paragraphs.is_empty() {
+        Ok("(文档无文本内容)".to_string())
+    } else {
+        Ok(paragraphs.join("\n\n"))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -437,7 +480,8 @@ pub fn run() {
             archive_to_zip,
             find_duplicates,
             open_in_system,
-            select_directory
+            select_directory,
+            read_docx_text
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

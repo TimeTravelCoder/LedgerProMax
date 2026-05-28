@@ -55,14 +55,40 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
   const fileExt = filename.substring(filename.lastIndexOf(".")).toLowerCase();
   const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"].includes(fileExt);
   const isPdf = fileExt === ".pdf";
-  const isOffice = [".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"].includes(fileExt);
+  const isDocx = fileExt === ".docx";
+  const isOldDoc = fileExt === ".doc";
+  const isSpreadsheet = [".xls", ".xlsx"].includes(fileExt);
+  const isPresentation = [".ppt", ".pptx"].includes(fileExt);
+  const isOffice = isDocx || isOldDoc || isSpreadsheet || isPresentation;
   const isBinary = [".zip", ".rar", ".7z", ".exe", ".dll", ".dmg", ".pkg", ".tar", ".gz"].includes(fileExt);
 
   // Absolute path of the file for local preview
   const absolutePath = `${workspaceDir}/${filepath}`.replace(/\//g, "\\");
 
   useEffect(() => {
-    if (isImage || isPdf || isOffice || isBinary) return;
+    if (isImage || isPdf || isBinary) return;
+
+    // .docx files: extract text via Rust backend
+    if (isDocx) {
+      const fetchDocx = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const text: string = await invoke("read_docx_text", { workspaceDir, filepath });
+          setContent(text);
+        } catch (err: any) {
+          console.error(err);
+          setError(`读取 Word 文档失败: ${err}`);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchDocx();
+      return;
+    }
+
+    // .doc, .xls, .ppt: skip — binary legacy formats
+    if (isOldDoc || isSpreadsheet || isPresentation) return;
 
     const fetchContent = async () => {
       setLoading(true);
@@ -79,7 +105,7 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
     };
 
     fetchContent();
-  }, [workspaceDir, filepath, isImage, isPdf, isOffice, isBinary]);
+  }, [workspaceDir, filepath, isImage, isPdf, isDocx, isOldDoc, isSpreadsheet, isPresentation, isBinary]);
 
 
 
@@ -215,39 +241,106 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
       );
     }
 
-    if (isOffice || isBinary) {
+    if (isDocx) {
+      // .docx text content preview
+      if (loading) {
+        return (
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "150px", color: "var(--text-secondary)" }}>
+            <div className="spinner" style={{ marginRight: "10px" }} /> 正在解析 Word 文档...
+          </div>
+        );
+      }
+      if (error) {
+        return (
+          <div style={{ padding: "16px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "var(--color-danger)", fontSize: "13px" }}>
+            {error}
+          </div>
+        );
+      }
       const isLightTheme = theme === "light";
       return (
-        <div 
-          style={{ 
-            display: "flex", 
-            flexDirection: "column", 
-            alignItems: "center", 
-            justifyContent: "center", 
-            padding: "32px 24px", 
-            background: isLightTheme ? "rgba(0, 0, 0, 0.02)" : "rgba(255, 255, 255, 0.01)", 
-            borderRadius: "12px", 
-            border: "1px dashed var(--border-light)", 
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div style={{
+            background: isLightTheme ? "#fefce8" : "rgba(251, 191, 36, 0.08)",
+            border: `1px solid ${isLightTheme ? "rgba(180, 83, 9, 0.2)" : "rgba(251, 191, 36, 0.18)"}`,
+            borderRadius: "8px",
+            padding: "8px 12px",
+            fontSize: "11px",
+            color: isLightTheme ? "#92400e" : "var(--color-warning)",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px"
+          }}>
+            <span>仅显示文本内容，格式与图片可能未完整保留。</span>
+            <button
+              className="btn"
+              onClick={handleOpenInSystem}
+              style={{ marginLeft: "auto", padding: "4px 10px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px", flexShrink: 0 }}
+            >
+              <ExternalLink size={12} />
+              用 Word 打开
+            </button>
+          </div>
+          <pre style={{
+            background: isLightTheme ? "#f8fafc" : "rgba(0,0,0,0.2)",
+            padding: "16px",
+            borderRadius: "10px",
+            border: `1px solid ${isLightTheme ? "rgba(0,0,0,0.08)" : "var(--border-light)"}`,
+            fontFamily: "var(--font-sans)",
+            fontSize: "14px",
+            color: "var(--text-primary)",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            lineHeight: "1.7",
+            margin: 0,
+            maxHeight: "58vh",
+            overflowY: "auto"
+          }}>
+            {content || "(文档无文本内容)"}
+          </pre>
+        </div>
+      );
+    }
+
+    if (isOldDoc || isSpreadsheet || isPresentation || isBinary) {
+      const isLightTheme = theme === "light";
+      const label = isOldDoc ? "旧版 Word 文档 (.doc)" : isSpreadsheet ? "Excel 表格" : isPresentation ? "PowerPoint 演示文稿" : "压缩包或二进制文件";
+      const desc = isOldDoc
+        ? "旧版 .doc 格式为二进制复合文档，暂不支持文本提取。请在 Word 中打开此文件。"
+        : isSpreadsheet
+        ? "Excel 表格暂不支持直接在应用内预览。请在 Excel 中打开此文件。"
+        : isPresentation
+        ? "PPT 演示文稿暂不支持直接在应用内预览。请在 PowerPoint 中打开此文件。"
+        : "二进制与压缩文件不支持在应用内解析。请使用系统默认工具打开此文件。";
+      return (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "32px 24px",
+            background: isLightTheme ? "rgba(0, 0, 0, 0.02)" : "rgba(255, 255, 255, 0.01)",
+            borderRadius: "12px",
+            border: "1px dashed var(--border-light)",
             textAlign: "center",
             marginTop: "10px"
           }}
         >
-          {isOffice ? (
+          {isOldDoc || isSpreadsheet || isPresentation ? (
             <FileText size={48} style={{ color: "var(--color-primary)", marginBottom: "16px" }} />
           ) : (
             <Archive size={48} style={{ color: "var(--color-primary)", marginBottom: "16px" }} />
           )}
           <h4 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px" }}>
-            {isOffice ? "Microsoft Office 文档" : "压缩包或二进制文件"}
+            {label}
           </h4>
           <p style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5", maxWidth: "260px", marginBottom: "20px" }}>
-            {isOffice 
-              ? "Office 文档暂不支持直接在应用内预览。您可以复制本地路径或直接点击下方按钮在您系统的 Office 中打开此文件。" 
-              : "二进制与压缩文件不支持在应用内解析。您可以复制本地路径或直接使用系统默认解压/关联工具打开此文件。"}
+            {desc}
           </p>
-          <button 
-            className="btn btn-primary" 
-            onClick={handleOpenInSystem} 
+          <button
+            className="btn btn-primary"
+            onClick={handleOpenInSystem}
             style={{ padding: "8px 16px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
           >
             <ExternalLink size={14} />
