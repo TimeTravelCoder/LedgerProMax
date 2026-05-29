@@ -39,7 +39,8 @@ import {
   FileSpreadsheet,
   FileCode,
   FileVideo,
-  FileAudio
+  FileAudio,
+  Info
 } from "lucide-react";
 
 interface FileRecord {
@@ -147,7 +148,7 @@ const getFileIcon = (filename: string, size = 32) => {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "inbox" | "workspace" | "backup" | "settings" | "duplicates">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "inbox" | "workspace" | "backup" | "settings" | "duplicates" | "about">("dashboard");
   const [theme, setTheme] = useState<"dark" | "light">("light");
   const [inboxRightTab, setInboxRightTab] = useState<"archive" | "preview">("archive");
 
@@ -1480,12 +1481,20 @@ export default function App() {
             <span>智能查重整理</span>
           </div>
 
-          <div 
-            onClick={() => setActiveTab("settings")} 
+          <div
+            onClick={() => setActiveTab("settings")}
             className={`menu-item ${activeTab === "settings" ? "active" : ""}`}
           >
             <Settings size={18} />
             <span>控制面板与设置</span>
+          </div>
+
+          <div
+            onClick={() => setActiveTab("about")}
+            className={`menu-item ${activeTab === "about" ? "active" : ""}`}
+          >
+            <Info size={18} />
+            <span>关于 Pro Max</span>
           </div>
         </div>
 
@@ -1517,6 +1526,7 @@ export default function App() {
             {activeTab === "backup" && "Pro Backup 3-2-1 增量镜像"}
             {activeTab === "duplicates" && "Pro Cleaner 智能查重清理中心"}
             {activeTab === "settings" && "Pro Control 控制面板与系统配置"}
+            {activeTab === "about" && "About 关于 Ledger Pro Max"}
           </div>
 
           <div className="header-actions">
@@ -4210,6 +4220,79 @@ export default function App() {
                     {saveStatus === "saving" ? "保存中..." : "保存并热加载"}
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* 5. ABOUT TAB */}
+          {activeTab === "about" && (
+            <div style={{overflowY: "auto", flex: 1, paddingRight: "6px", paddingBottom: "30px", maxWidth: "780px", margin: "0 auto", width: "100%"}}>
+              {/* Hero */}
+              <div style={{textAlign: "center", padding: "40px 20px 20px"}}>
+                <div style={{background: "linear-gradient(135deg, var(--color-primary) 0%, #a855f7 52%, #22d3ee 100%)", width: "72px", height: "72px", borderRadius: "18px", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "24px", fontWeight: 800, color: "#fff", boxShadow: "0 12px 30px rgba(99, 102, 241, 0.3)", marginBottom: "20px"}}>PM</div>
+                <h1 style={{fontFamily: "var(--font-display)", fontSize: "28px", fontWeight: 800, marginBottom: "8px"}}>Ledger Pro Max</h1>
+                <p style={{color: "var(--text-secondary)", fontSize: "15px", marginBottom: "4px"}}>文档资产管理控制台 — 收集、整理、备份一条龙</p>
+                <span className="badge badge-success" style={{textTransform: "none", fontSize: "12px", padding: "4px 12px"}}>v0.1.0</span>
+              </div>
+
+              {/* Tech Stack */}
+              <div style={{display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap", marginBottom: "30px"}}>
+                {["Tauri v2", "React 19", "TypeScript", "Rust", "SQLite", "Lucide Icons"].map(t => (
+                  <span key={t} style={{padding: "4px 12px", borderRadius: "99px", border: "1px solid var(--border-light)", fontSize: "12px", color: "var(--text-secondary)", background: "rgba(255,255,255,0.02)"}}>{t}</span>
+                ))}
+              </div>
+
+              {/* Philosophy */}
+              <div className="cyber-card" style={{marginBottom: "20px"}}>
+                <h3 className="card-title">设计哲学</h3>
+                <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px", color: "var(--text-secondary)", lineHeight: "1.6"}}>
+                  <div>
+                    <strong style={{color: "var(--color-primary)"}}>PARA 方法论</strong>
+                    <p style={{margin: "4px 0 0"}}>Projects 项目 · Areas 领域 · Resources 资源 · Archives 归档</p>
+                  </div>
+                  <div>
+                    <strong style={{color: "var(--color-success)"}}>3-2-1 备份策略</strong>
+                    <p style={{margin: "4px 0 0"}}>3 份副本 · 2 种介质 · 1 份异地</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* System Info */}
+              <div className="cyber-card" style={{marginBottom: "20px"}}>
+                <h3 className="card-title">系统诊断</h3>
+                <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px"}}>
+                  {[
+                    ["工作区路径", workspaceDir],
+                    ["数据库引擎", "SQLite (rusqlite bundled)"],
+                    ["平台架构", navigator.userAgent.includes("Win") ? "Windows x64" : navigator.platform],
+                    ["前端框架", "React 19 + Vite 8"],
+                    ["构建日期", "2026-05-29"],
+                    ["许可证", "MIT"],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{display: "flex", flexDirection: "column", gap: "4px"}}>
+                      <span style={{color: "var(--text-muted)", fontSize: "11px"}}>{label}</span>
+                      <span style={{color: "var(--text-primary)", fontWeight: 500, wordBreak: "break-all"}}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Open Source */}
+              <div className="cyber-card" style={{marginBottom: "20px"}}>
+                <h3 className="card-title">开源致谢</h3>
+                <div style={{display: "flex", flexWrap: "wrap", gap: "6px"}}>
+                  {["notify", "rusqlite", "zip-rs", "walkdir", "chrono", "sha2", "regex", "encoding-rs", "lucide-react", "serde", "tauri"].map(dep => (
+                    <span key={dep} style={{padding: "3px 10px", borderRadius: "6px", background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-light)", fontSize: "12px", color: "var(--text-secondary)", fontFamily: "monospace"}}>{dep}</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Links */}
+              <div style={{textAlign: "center", padding: "20px 0 40px", fontSize: "13px", color: "var(--text-muted)"}}>
+                <span>GitHub: </span>
+                <a href="https://github.com/TimeTravelCoder/LedgerProMax" target="_blank" style={{color: "var(--color-primary)", textDecoration: "none"}}>TimeTravelCoder/LedgerProMax</a>
+                <span style={{margin: "0 12px"}}>·</span>
+                <span>Built with ❤️ for knowledge workers</span>
               </div>
             </div>
           )}
