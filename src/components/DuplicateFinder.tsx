@@ -56,8 +56,8 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
       if (group.length <= 1) return;
       
       // Sort group: oldest first (minimum modified_time)
-      const sorted = [...group].sort((a, b) => a.modified_time - b.modified_time);
-      // Keep the first (oldest), mark the rest for deletion
+      const sorted = [...group].sort((a, b) => b.modified_time - a.modified_time);
+      // Keep the first (newest), mark the rest for deletion
       for (let i = 1; i < sorted.length; i++) {
         toDelete.push(sorted[i].filepath.toString());
       }

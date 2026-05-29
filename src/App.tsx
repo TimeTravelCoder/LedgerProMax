@@ -278,6 +278,10 @@ export default function App() {
   const [isArchiving, setIsArchiving] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [inboxSort, setInboxSort] = useState<"name" | "size" | "time">("time");
+  const [checkedInboxFiles, setCheckedInboxFiles] = useState<string[]>([]);
+  const [inboxMultiMode, setInboxMultiMode] = useState(false);
+  const [undoStack, setUndoStack] = useState<{action: string; filepath: string; timestamp: number}[]>([]);
 
   // State: Global Status tags distribution
   const [tagDistribution, setTagDistribution] = useState<Record<string, number>>({});
@@ -457,6 +461,16 @@ export default function App() {
     // Apply theme attribute to body/html
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  // Detect OS theme preference on first load
+  useEffect(() => {
+    if (configLoaded) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    if (mq.matches) setTheme("dark");
+    const handler = (e: MediaQueryListEvent) => setTheme(e.matches ? "dark" : "light");
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [configLoaded]);
 
   const handleInitWorkspace = async () => {
     try {
@@ -647,6 +661,32 @@ export default function App() {
       unlistenDragDrop.then(f => f());
     };
   }, []);
+
+  // Keyboard shortcuts
+  const saveConfigRef = useRef(handleSaveConfig);
+  saveConfigRef.current = handleSaveConfig;
+  const deleteFileRef = useRef(handleDeleteFile);
+  deleteFileRef.current = handleDeleteFile;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+
+      if (ctrl && e.key === "f") { e.preventDefault(); setActiveTab("workspace"); setTimeout(() => document.querySelector<HTMLInputElement>('.main-content input[type="text"]')?.focus(), 100); }
+      else if (ctrl && e.key === "n") { e.preventDefault(); setActiveTab("workspace"); setIsCreateFolderExpanded(true); }
+      else if (ctrl && e.key === "s") { e.preventDefault(); saveConfigRef.current(); }
+      else if (e.key === "Delete" && selectedWorkspaceFile) { e.preventDefault(); deleteFileRef.current(selectedWorkspaceFile.filepath.toString()); }
+      else if (ctrl && e.key === "1") { e.preventDefault(); setActiveTab("dashboard"); }
+      else if (ctrl && e.key === "2") { e.preventDefault(); setActiveTab("inbox"); }
+      else if (ctrl && e.key === "3") { e.preventDefault(); setActiveTab("workspace"); }
+      else if (ctrl && e.key === "4") { e.preventDefault(); setActiveTab("backup"); }
+      else if (ctrl && e.key === "5") { e.preventDefault(); setActiveTab("duplicates"); }
+      else if (e.key === "Escape") { setIsCreateFolderExpanded(false); setIsCreateProjectExpanded(false); setRenameModalShow(false); setShowZipModal(false); }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [selectedWorkspaceFile]);
 
   // Re-init watcher when workspace/monitor dirs change AFTER initial load
   useEffect(() => {
@@ -1058,11 +1098,29 @@ export default function App() {
 
       addLog(`文档归档成功: ${selectedInboxFile.filename} -> ${destRel}`);
       showToast("归档成功！", "success");
+      setUndoStack(prev => [{action: `归档 ${selectedInboxFile.filename} → ${destRel}`, filepath: finalRel, timestamp: Date.now()}, ...prev].slice(0, 20));
+      // Auto-select next inbox file for continuous processing
+      const archivedPath = selectedInboxFile.filepath;
       setSelectedInboxFile(null);
       setTopicName("");
       setRemark("");
       setChosenTags([]);
+      setVersion("v1.0");
+      setFileStatus("#待处理");
       await handleRefreshData();
+      // Select next file after refresh
+      setTimeout(() => {
+        setInboxFiles(prev => {
+          const remaining = prev.filter(f => f.filepath !== archivedPath);
+          if (remaining.length > 0) {
+            const next = remaining[0];
+            const nextDot = next.filename.toString().lastIndexOf(".");
+            setSelectedInboxFile(next);
+            setTopicName(nextDot > 0 ? next.filename.toString().substring(0, nextDot) : next.filename.toString());
+          }
+          return remaining;
+        });
+      }, 200);
     } catch (err: any) {
       addLog(`[错误] 归档失败: ${err}`);
       showToast(`归档失败: ${err}`, "error");
@@ -1079,6 +1137,7 @@ export default function App() {
     try {
       await invoke("delete_file", { workspaceDir, filepath });
       addLog(`删除成功: ${filepath}`);
+      setUndoStack(prev => [{action: `删除 ${filepath}`, filepath, timestamp: Date.now()}, ...prev].slice(0, 20));
       setSelectedWorkspaceFile(null);
       setSelectedInboxFile(null);
       setPreviewFile(null);
@@ -2171,7 +2230,29 @@ export default function App() {
 
                 {/* Inbox files List */}
                 <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, minHeight: 0}}>
-                  <h3 className="card-title" style={{flexShrink: 0}}>📥 收集箱待整理文件 ({inboxFiles.length})</h3>
+                  <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0}}>
+                    <h3 className="card-title" style={{margin: 0}}>📥 收集箱待整理文件 ({inboxFiles.length})</h3>
+                    <div style={{display: "flex", gap: "8px", alignItems: "center"}}>
+                      <select value={inboxSort} onChange={(e) => setInboxSort(e.target.value as any)} style={{fontSize: "11px", padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--border-light)", background: "var(--bg-secondary)", color: "var(--text-secondary)", cursor: "pointer"}}>
+                        <option value="time">按时间</option><option value="name">按名称</option><option value="size">按大小</option>
+                      </select>
+                      <button onClick={() => { setInboxMultiMode(!inboxMultiMode); setCheckedInboxFiles([]); }} style={{fontSize: "11px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--border-light)", background: inboxMultiMode ? "var(--color-primary)" : "var(--bg-secondary)", color: inboxMultiMode ? "#fff" : "var(--text-secondary)", cursor: "pointer"}}>
+                        {inboxMultiMode ? "取消多选" : "多选"}
+                      </button>
+                      {inboxMultiMode && checkedInboxFiles.length > 0 && (
+                        <button onClick={async () => {
+                          setInboxMultiMode(false);
+                          for (const fp of checkedInboxFiles) {
+                            const f = inboxFiles.find(x => x.filepath.toString() === fp);
+                            if (f) { setSelectedInboxFile(f); await handleArchiveFile(); }
+                          }
+                          setCheckedInboxFiles([]);
+                        }} style={{fontSize: "11px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--color-success)", background: "var(--color-success-glow)", color: "var(--color-success)", cursor: "pointer", fontWeight: 600}}>
+                          批量归档 ({checkedInboxFiles.length})
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   {inboxFiles.length === 0 ? (
                     <div style={{display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, border: "2px dashed var(--border-light)", borderRadius: "16px", padding: "40px", color: "var(--text-secondary)"}}>
                       <CheckCircle2 size={48} style={{color: "var(--color-success)", marginBottom: "16px"}} />
@@ -2180,18 +2261,24 @@ export default function App() {
                     </div>
                   ) : (
                     <div style={{display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1, minHeight: 0, paddingRight: "6px"}}>
-                      {inboxFiles.map((file, idx) => (
+                      {[...inboxFiles].sort((a, b) => inboxSort === "name" ? String(a.filename).localeCompare(String(b.filename)) : inboxSort === "size" ? Number(b.file_size) - Number(a.file_size) : Number(b.modified_time) - Number(a.modified_time)).map((file, idx) => {
+                        const isChecked = checkedInboxFiles.includes(file.filepath.toString());
+                        return (
                         <div
                           key={idx}
                           onClick={() => {
-                            setSelectedInboxFile(file);
-                            const dotIdx = file.filename.toString().lastIndexOf(".");
-                            setTopicName(dotIdx > 0 ? file.filename.toString().substring(0, dotIdx) : file.filename.toString());
-                            setInboxRightTab("archive");
-                            setRemark("");
-                            setVersion("v1.0");
-                            setFileStatus("#待处理");
-                            setCustomTagInput("");
+                            if (inboxMultiMode) {
+                              setCheckedInboxFiles(prev => isChecked ? prev.filter(f => f !== file.filepath.toString()) : [...prev, file.filepath.toString()]);
+                            } else {
+                              setSelectedInboxFile(file);
+                              const dotIdx = file.filename.toString().lastIndexOf(".");
+                              setTopicName(dotIdx > 0 ? file.filename.toString().substring(0, dotIdx) : file.filename.toString());
+                              setInboxRightTab("archive");
+                              setRemark("");
+                              setVersion("v1.0");
+                              setFileStatus("#待处理");
+                              setCustomTagInput("");
+                            }
                           }}
                           onDoubleClick={() => setPreviewFile(file)}
                           style={{
@@ -2202,8 +2289,8 @@ export default function App() {
                             alignItems: "center",
                             justifyContent: "space-between",
                             border: "1px solid",
-                            borderColor: selectedInboxFile?.filepath === file.filepath ? "var(--color-primary)" : "var(--border-light)",
-                            background: selectedInboxFile?.filepath === file.filepath ? "var(--color-primary-glow)" : "var(--bg-secondary)",
+                            borderColor: isChecked ? "var(--color-success)" : selectedInboxFile?.filepath === file.filepath ? "var(--color-primary)" : "var(--border-light)",
+                            background: isChecked ? "var(--color-success-glow)" : selectedInboxFile?.filepath === file.filepath ? "var(--color-primary-glow)" : "var(--bg-secondary)",
                             transition: "border-color 0.15s ease, background 0.15s ease"
                           }}
                           onMouseEnter={(e) => {
@@ -2265,7 +2352,8 @@ export default function App() {
                             </button>
                           </div>
                         </div>
-                      ))}
+                      );
+                    })}
                     </div>
                   )}
                 </div>
@@ -4092,10 +4180,28 @@ export default function App() {
                 <div className={`settings-status ${saveStatus === "error" ? "warn" : saveStatus === "saved" ? "ok" : ""}`}>
                   {saveMessage || "修改配置后请保存，保存会同步工作空间与监听规则。"}
                 </div>
-                <button className="btn btn-primary" onClick={handleSaveConfig} disabled={saveStatus === "saving"}>
-                  <Save size={16} />
-                  {saveStatus === "saving" ? "保存中..." : "保存全局配置并热加载"}
-                </button>
+                <div style={{display: "flex", gap: "8px"}}>
+                  <button className="btn" onClick={async () => {
+                    try { const config = await invoke("load_config"); const blob = new Blob([JSON.stringify(config, null, 2)], {type: "application/json"}); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "ledger-pro-max-config.json"; a.click(); URL.revokeObjectURL(url); showToast("配置已导出！", "success"); } catch { showToast("导出失败", "error"); }
+                  }} style={{fontSize: "11px", padding: "6px 12px"}}>📤 导出</button>
+                  <button className="btn" onClick={() => {
+                    const input = document.createElement("input"); input.type = "file"; input.accept = ".json"; input.onchange = async (e: any) => { try { const text = await e.target.files[0].text(); const config = JSON.parse(text); await invoke("save_config", { config }); showToast("配置已导入！正在重载...", "success"); setTimeout(() => window.location.reload(), 1000); } catch { showToast("导入失败：文件格式错误", "error"); } }; input.click();
+                  }} style={{fontSize: "11px", padding: "6px 12px"}}>📥 导入</button>
+                  <button className="btn danger" onClick={() => {
+                    if (!window.confirm("确定要重置所有配置为默认值吗？此操作不可撤销。")) return;
+                    setWorkspaceDir("C:\\Users\\Ming\\Desktop\\Ledger Pro Max\\Workspace");
+                    setMonitoredDirs("C:\\Users\\Ming\\Downloads");
+                    setBackupDiskDir(""); setBackupCloudDir("");
+                    setTagsState({primary: [], secondary: [], status: ["#待处理", "#进行中", "#已完成", "#非常重要"]});
+                    setAutoRulesState([]); setNamingTemplates(prev => prev.filter(t => !t.key.startsWith("custom_")));
+                    setWorkspaceLang("zh-full"); setTheme("light");
+                    showToast("配置已重置，请保存以生效。", "warning");
+                  }} style={{fontSize: "11px", padding: "6px 12px"}}>🔄 重置</button>
+                  <button className="btn btn-primary" onClick={handleSaveConfig} disabled={saveStatus === "saving"}>
+                    <Save size={16} />
+                    {saveStatus === "saving" ? "保存中..." : "保存并热加载"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -4112,6 +4218,16 @@ export default function App() {
 
         </div>
       </div>
+
+      {/* Recent operations log bar */}
+      {undoStack.length > 0 && (
+        <div style={{position: "fixed", bottom: "20px", left: "50%", transform: "translateX(-50%)", zIndex: 10000, background: "var(--bg-secondary)", border: "1px solid var(--border-light)", borderRadius: "12px", padding: "10px 20px", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: "12px", fontSize: "13px", maxWidth: "90vw"}}>
+          <span style={{color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
+            {undoStack.slice(0, 3).map((op, i) => <span key={i} style={{marginRight: "12px"}}>{i === 0 ? "●" : "○"} {op.action}</span>)}
+          </span>
+          <button onClick={() => setUndoStack([])} style={{background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: "14px", flexShrink: 0}}>清除</button>
+        </div>
+      )}
 
       {/* 🤐 Safe Zip Archive Modal Popup */}
       {showZipModal && (
