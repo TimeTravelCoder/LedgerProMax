@@ -644,7 +644,7 @@ export default function App() {
         size: payload.file_size,
         filepath: payload.filepath
       });
-      refreshDataRef.current();
+      handleRefreshData();
       toastTimeoutRef.current = setTimeout(() => setNotification(null), 15000);
     });
 
@@ -653,7 +653,7 @@ export default function App() {
     const unlistenDragDrop = listen("tauri://drag-drop", (event: any) => {
       setIsDragging(false);
       const paths: string[] = event.payload.paths;
-      if (paths && paths.length > 0) importToInboxRef.current(paths);
+      if (paths && paths.length > 0) handleBatchImportToInbox(paths);
     });
 
     return () => {
