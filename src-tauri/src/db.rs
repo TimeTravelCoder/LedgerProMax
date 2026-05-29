@@ -204,9 +204,10 @@ impl DatabaseManager {
 
     pub fn delete_folder_records(&self, folder_rel_path: &str) -> Result<()> {
         let conn = self.get_conn()?;
-        let folder_prefix = format!("{}/", folder_rel_path);
+        let escaped = folder_rel_path.replace("%", "\\%").replace("_", "\\_");
+        let folder_prefix = format!("{}/", escaped);
         conn.execute(
-            "DELETE FROM files WHERE filepath = ? OR filepath LIKE ?",
+            "DELETE FROM files WHERE filepath = ? OR filepath LIKE ? ESCAPE '\\'",
             params![folder_rel_path, format!("{}%", folder_prefix)],
         )?;
         Ok(())

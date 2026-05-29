@@ -71,8 +71,8 @@ impl BackupManager {
             } else {
                 let src_meta = src_file.metadata().map_err(|e| e.to_string())?;
                 let dst_meta = dst_file.metadata().map_err(|e| e.to_string())?;
-                let src_mtime = src_meta.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64();
-                let dst_mtime = dst_meta.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64();
+                let src_mtime = src_meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs_f64()).unwrap_or(0.0);
+                let dst_mtime = dst_meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs_f64()).unwrap_or(0.0);
 
                 if src_meta.len() != dst_meta.len() || (src_mtime - dst_mtime).abs() > 0.1 {
                     need_copy = true;

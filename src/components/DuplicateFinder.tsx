@@ -75,7 +75,7 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
   };
 
   const handleDeleteChecked = async () => {
-    if (checkedFiles.length === 0) return;
+    if (checkedFiles.length === 0 || loading) return;
     const confirmMsg = `确定要永久删除这 ${checkedFiles.length} 个重复的冗余文件吗？此操作不可逆！`;
     if (!window.confirm(confirmMsg)) return;
 
@@ -279,6 +279,7 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
       {checkedFiles.length > 0 && (
         <button
           onClick={handleDeleteChecked}
+          disabled={loading}
           className="btn"
           style={{
             background: "rgba(239, 68, 68, 0.1)",

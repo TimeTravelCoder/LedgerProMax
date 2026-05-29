@@ -392,6 +392,10 @@ fn select_directory() -> Result<String, String> {
     }
 }
 
+lazy_static::lazy_static! {
+    static ref DOCX_TEXT_RE: regex::Regex = regex::Regex::new(r"<w:t[^>]*>([^<]*)</w:t>").unwrap();
+}
+
 #[tauri::command]
 fn read_docx_text(workspace_dir: String, filepath: String) -> Result<String, String> {
     let abs_path = FileManager::safe_workspace_path(&filepath, &workspace_dir)?;
@@ -411,14 +415,13 @@ fn read_docx_text(workspace_dir: String, filepath: String) -> Result<String, Str
         buf
     };
 
-    // Extract text from <w:t> elements using regex
-    let re = regex::Regex::new(r"<w:t[^>]*>([^<]*)</w:t>").map_err(|e| e.to_string())?;
+    // Extract text from <w:t> elements using cached regex
     let mut paragraphs = Vec::new();
 
     // Split by paragraph markers to preserve paragraph breaks
     for part in xml_text.split("</w:p>") {
         let mut para_text = String::new();
-        for cap in re.captures_iter(part) {
+        for cap in DOCX_TEXT_RE.captures_iter(part) {
             if let Some(text) = cap.get(1) {
                 para_text.push_str(text.as_str());
             }

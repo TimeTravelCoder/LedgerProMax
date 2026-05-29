@@ -438,7 +438,7 @@ impl FileManager {
                     if let Ok(metadata) = entry.metadata() {
                         let size = metadata.len() as i64;
                         let mtime = metadata.modified()
-                            .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64())
+                            .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs_f64())
                             .unwrap_or(0.0);
                         
                         let filename_owned = name.into_owned();
@@ -474,9 +474,12 @@ impl FileManager {
         let src = Path::new(src_path);
         let mut dest = Self::safe_workspace_path(dest_rel_path, workspace_dir)?;
 
-        if src.exists() && dest.exists() && src.canonicalize().unwrap() == dest.canonicalize().unwrap() {
-            let rel = dest.strip_prefix(&ws_root).unwrap();
-            return Ok(rel.to_string_lossy().replace("\\", "/"));
+        if let (Ok(src_canon), Ok(dest_canon)) = (src.canonicalize(), dest.canonicalize()) {
+            if src.exists() && dest.exists() && src_canon == dest_canon {
+                if let Ok(rel) = dest.strip_prefix(&ws_root) {
+                    return Ok(rel.to_string_lossy().replace("\\", "/"));
+                }
+            }
         }
 
         if Self::is_banned_name(new_filename) {
@@ -516,28 +519,30 @@ impl FileManager {
         if let Ok(src_canonical) = src.canonicalize() {
             if src_canonical.starts_with(&ws_root) {
                 src_is_inside = true;
-                src_rel_path = Some(src_canonical.strip_prefix(&ws_root).unwrap().to_string_lossy().replace("\\", "/"));
+                src_rel_path = src_canonical.strip_prefix(&ws_root).ok().map(|p| p.to_string_lossy().replace("\\", "/"));
                 if let Ok(metadata) = src_canonical.metadata() {
-                    src_stat = Some((metadata.len() as i64, metadata.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64()));
+                    let mtime = metadata.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs_f64()).unwrap_or(0.0);
+                    src_stat = Some((metadata.len() as i64, mtime));
                 }
             }
         }
 
         fs::rename(src, &dest).map_err(|e| e.to_string())?;
 
-        let new_rel_path = dest.strip_prefix(&ws_root).unwrap().to_string_lossy().replace("\\", "/");
+        let new_rel_path = dest.strip_prefix(&ws_root).map_err(|_| "路径解析失败".to_string())?.to_string_lossy().replace("\\", "/");
 
         if src_is_inside && src_rel_path.is_some() {
             let src_rel = src_rel_path.unwrap();
             if db.get_file_info(&src_rel).unwrap().is_none() && src_stat.is_some() {
                 let (size, mtime) = src_stat.unwrap();
-                let _ = db.sync_file_metadata(&src_rel, src.file_name().unwrap().to_str().unwrap(), size, mtime);
+                let src_fname = src.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
+                let _ = db.sync_file_metadata(&src_rel, src_fname, size, mtime);
             }
             db.rename_file_record(&src_rel, &new_rel_path, &final_filename).map_err(|e| e.to_string())?;
         } else {
             let metadata = dest.metadata().map_err(|e| e.to_string())?;
             let size = metadata.len() as i64;
-            let mtime = metadata.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64();
+            let mtime = metadata.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs_f64()).unwrap_or(0.0);
             db.sync_file_metadata(&new_rel_path, &final_filename, size, mtime).map_err(|e| e.to_string())?;
         }
 
@@ -586,8 +591,8 @@ impl FileManager {
             return Err("归档列表中没有可打包的有效文件。".to_string());
         }
 
-        // Compress to temp file
-        {
+        // Compress to temp file, verify, rename atomically — cleanup on failure
+        let result = (|| -> Result<(), String> {
             let file = fs::File::create(&temp_zip_path).map_err(|e| e.to_string())?;
             let mut zip = zip::ZipWriter::new(file);
             let options = zip::write::FileOptions::<()>::default()
@@ -595,24 +600,30 @@ impl FileManager {
 
             for (src_abs, rel_path) in &source_paths {
                 let rel_arc = rel_path.replace("\\", "/");
-                zip.start_file(rel_arc, options).map_err(|e| e.to_string())?;
+                let safe_arc = rel_arc.split('/').filter(|c| *c != ".." && *c != ".").collect::<Vec<_>>().join("/");
+                if safe_arc.is_empty() { continue; }
+                zip.start_file(safe_arc.as_str(), options).map_err(|e| e.to_string())?;
                 let mut f = fs::File::open(src_abs).map_err(|e| e.to_string())?;
                 std::io::copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
             }
             zip.finish().map_err(|e| e.to_string())?;
-        }
 
-        // Integrity verification
-        {
+            // Integrity verification
             let file = fs::File::open(&temp_zip_path).map_err(|e| e.to_string())?;
             let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
             for i in 0..archive.len() {
                 let _file = archive.by_index(i).map_err(|e| e.to_string())?;
             }
-        }
 
-        // Atomic replace
-        fs::rename(&temp_zip_path, &dest_zip_path).map_err(|e| e.to_string())?;
+            // Atomic replace
+            fs::rename(&temp_zip_path, &dest_zip_path).map_err(|e| e.to_string())?;
+            Ok(())
+        })();
+
+        if let Err(e) = result {
+            let _ = fs::remove_file(&temp_zip_path);
+            return Err(e);
+        }
 
         // Delete source files physically and from DB
         let mut count = 0;

@@ -355,6 +355,7 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
       const lines = content.split("\n");
       let insideCodeBlock = false;
       let codeBlockContent: string[] = [];
+      let codeBlockOpenIdx = -1;
       const isLightTheme = theme === "light";
 
       return (
@@ -431,6 +432,11 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
             // Normal paragraphs
             return line === "" ? <div key={idx} style={{ height: "8px" }} /> : <p key={idx} style={{ marginBottom: "8px" }}>{line}</p>;
           })}
+          {insideCodeBlock && codeBlockContent.length > 0 && (
+            <pre style={{ background: isLightTheme ? "#f8fafc" : "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "8px", border: isLightTheme ? "1px solid rgba(0,0,0,0.08)" : "1px solid var(--border-light)", fontFamily: "var(--mono)", fontSize: "12px", overflowX: "auto", margin: "12px 0", color: isLightTheme ? "#0969da" : "#60a5fa" }}>
+              <code>{codeBlockContent.join("\n")}</code>
+            </pre>
+          )}
         </div>
       );
     }

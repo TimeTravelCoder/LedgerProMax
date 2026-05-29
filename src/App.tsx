@@ -276,6 +276,8 @@ export default function App() {
   const [backupLog, setBackupLog] = useState<string[]>([]);
   const [backupHistory, setBackupHistory] = useState<BackupHistoryRecord[]>([]);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   // State: Global Status tags distribution
   const [tagDistribution, setTagDistribution] = useState<Record<string, number>>({});
@@ -751,6 +753,7 @@ export default function App() {
 
   // Trigger Pinyin Search
   useEffect(() => {
+    let cancelled = false;
     const triggerSearch = async () => {
       try {
         const query = searchQuery.trim() === "" ? null : searchQuery;
@@ -790,12 +793,13 @@ export default function App() {
           });
         }
 
-        setWorkspaceFiles(filtered);
+        if (!cancelled) setWorkspaceFiles(filtered);
       } catch (err) {
-        console.error(err);
+        if (!cancelled) console.error(err);
       }
     };
     triggerSearch();
+    return () => { cancelled = true; };
   }, [searchQuery, selectedCategory, selectedTagsFilter, statusFilter, extensionFilter, searchVersion]);
 
   // Tag Recommendations & Rules Suggestion when selecting inbox file
@@ -833,7 +837,7 @@ export default function App() {
 
   const addBackupLog = (msg: string) => {
     const time = new Date().toLocaleTimeString();
-    setBackupLog(prev => [`[${time}] ${msg}`, ...prev]);
+    setBackupLog(prev => [`[${time}] ${msg}`, ...prev].slice(0, 200));
   };
 
   const handleAddOrUpdateRule = () => {
@@ -981,6 +985,7 @@ export default function App() {
 
   // Execute Backup
   const handleRunBackup = async (type: "disk" | "cloud") => {
+    if (isBackingUp) return;
     const targetDir = type === "disk" ? backupDiskDir : backupCloudDir;
     if (!targetDir.trim()) {
       const label = type === "disk" ? "外部硬盘" : "云盘";
@@ -988,6 +993,7 @@ export default function App() {
       showToast(`请先在控制面板中配置${label}备份路径`, "warning");
       return;
     }
+    setIsBackingUp(true);
     addBackupLog(`正在向 ${type === "disk" ? "硬盘" : "云盘"} 备份数据 (${targetDir})...`);
     try {
       const msg: string = await invoke("perform_backup", { backupType: type, workspaceDir, destDir: targetDir });
@@ -995,6 +1001,8 @@ export default function App() {
       await handleRefreshData();
     } catch (err: any) {
       addBackupLog(`[错误] 备份失败: ${err}`);
+    } finally {
+      setIsBackingUp(false);
     }
   };
 
@@ -1065,7 +1073,9 @@ export default function App() {
 
   // Delete File
   const handleDeleteFile = async (filepath: string) => {
+    if (isDeleting) return;
     if (!window.confirm("确定要永久删除此文件吗？此操作无法撤销。")) return;
+    setIsDeleting(filepath);
     try {
       await invoke("delete_file", { workspaceDir, filepath });
       addLog(`删除成功: ${filepath}`);
@@ -1075,6 +1085,9 @@ export default function App() {
       await handleRefreshData();
     } catch (err: any) {
       addLog(`[错误] 删除失败: ${err}`);
+      showToast(`删除失败: ${err}`, "error");
+    } finally {
+      setIsDeleting(null);
     }
   };
 
@@ -1270,7 +1283,7 @@ export default function App() {
 
   const linePathStr = getSplinePathString(splinePoints);
   const areaPathStr = linePathStr ? `${linePathStr} L ${splinePoints[splinePoints.length - 1].x} ${svgHeight - 30} L ${splinePoints[0].x} ${svgHeight - 30} Z` : "";
-  const taggedFilesCount = workspaceFiles.filter(f => String(f.tags || "").trim().length > 0).length;
+  const taggedFilesCount = allWorkspaceFiles.filter(f => String(f.tags || "").trim().length > 0).length;
   const archiveCoverage = totalFiles > 0 ? Math.round((taggedFilesCount / totalFiles) * 100) : 0;
   const enabledRulesCount = autoRulesState.filter(rule => rule.enabled !== false).length;
   const totalTagCount = tagsState.primary.length + tagsState.secondary.length + tagsState.status.length;
@@ -2175,6 +2188,10 @@ export default function App() {
                             const dotIdx = file.filename.toString().lastIndexOf(".");
                             setTopicName(dotIdx > 0 ? file.filename.toString().substring(0, dotIdx) : file.filename.toString());
                             setInboxRightTab("archive");
+                            setRemark("");
+                            setVersion("v1.0");
+                            setFileStatus("#待处理");
+                            setCustomTagInput("");
                           }}
                           onDoubleClick={() => setPreviewFile(file)}
                           style={{
@@ -2686,7 +2703,7 @@ export default function App() {
                   </div>
                   <div style={{display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--text-muted)"}}>
                     <span>总文档: {workspaceFiles.length} / 500 个</span>
-                    <span>备份率: {workspaceFiles.length > 0 ? Math.round((workspaceFiles.filter(f => f.backup_disk_status === 1 || f.backup_cloud_status === 1).length / workspaceFiles.length) * 100) : 0}%</span>
+                    <span>备份率: {allWorkspaceFiles.length > 0 ? Math.round((allWorkspaceFiles.filter(f => f.backup_disk_status === 1 || f.backup_cloud_status === 1).length / allWorkspaceFiles.length) * 100) : 0}%</span>
                   </div>
                 </div>
               </div>
@@ -3522,7 +3539,7 @@ export default function App() {
                       <h3 style={{fontSize: "15px", fontWeight: 600}}>外部存储介质备份</h3>
                     </div>
                     <p style={{fontSize: "12px", color: "var(--text-secondary)"}}>将工作空间所有数据安全镜像备份到移动硬盘或本地闪存卡中。</p>
-                    <button className="btn btn-primary" onClick={() => handleRunBackup("disk")} style={{width: "100%", justifyContent: "center"}}>
+                    <button className="btn btn-primary" onClick={() => handleRunBackup("disk")} disabled={isBackingUp} style={{width: "100%", justifyContent: "center", opacity: isBackingUp ? 0.6 : 1}}>
                       开始增量备份
                     </button>
                   </div>
