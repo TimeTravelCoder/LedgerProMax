@@ -282,6 +282,7 @@ export default function App() {
   const [checkedInboxFiles, setCheckedInboxFiles] = useState<string[]>([]);
   const [inboxMultiMode, setInboxMultiMode] = useState(false);
   const [undoStack, setUndoStack] = useState<{action: string; filepath: string; timestamp: number}[]>([]);
+  const [listRenderLimit, setListRenderLimit] = useState(50);
 
   // State: Global Status tags distribution
   const [tagDistribution, setTagDistribution] = useState<Record<string, number>>({});
@@ -840,6 +841,8 @@ export default function App() {
     };
     triggerSearch();
     return () => { cancelled = true; };
+    // Reset render limit when filters change
+    setListRenderLimit(50);
   }, [searchQuery, selectedCategory, selectedTagsFilter, statusFilter, extensionFilter, searchVersion]);
 
   // Tag Recommendations & Rules Suggestion when selecting inbox file
@@ -3025,7 +3028,13 @@ export default function App() {
                 </div>
 
                 {/* Workspace Files List */}
-                <div style={{display: "flex", flexDirection: "column", gap: "10px", flex: 1, minHeight: 0, overflowY: "auto"}}>
+                <div style={{display: "flex", flexDirection: "column", gap: "10px", flex: 1, minHeight: 0, overflowY: "auto"}}
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+                      setListRenderLimit(prev => Math.min(prev + 50, workspaceFiles.length));
+                    }
+                  }}>
                   {workspaceFiles.length === 0 ? (
                     <div style={{
                       display: "flex", 
@@ -3084,7 +3093,7 @@ export default function App() {
                       </div>
                     </div>
                   ) : workspaceViewMode === "list" ? (
-                    workspaceFiles.map((file, idx) => {
+                    workspaceFiles.slice(0, listRenderLimit).map((file, idx) => {
                       const isChecked = checkedWorkspaceFiles.includes(file.filepath.toString());
                       return (
                         <div 
@@ -3173,11 +3182,11 @@ export default function App() {
                       padding: "4px 4px 16px 4px",
                       width: "100%"
                     }}>
-                      {workspaceFiles.map((file, idx) => {
+                      {workspaceFiles.slice(0, listRenderLimit).map((file, idx) => {
                         const isChecked = checkedWorkspaceFiles.includes(file.filepath.toString());
                         const isSelected = selectedWorkspaceFile?.filepath === file.filepath;
                         return (
-                          <div 
+                          <div
                             key={idx}
                             onClick={() => {
                               if (multiSelectMode) {
@@ -3188,7 +3197,6 @@ export default function App() {
                                 }
                               } else {
                                 setSelectedWorkspaceFile(file);
-                                // Prep editor state in case editing is clicked
                                 setEditDescriptionInput(file.description?.toString() || "");
                                 setEditTagsInput(file.tags ? file.tags.split(",").map(t => t.trim()) : []);
                                 setIsEditingMetadata(false);
