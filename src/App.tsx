@@ -6,23 +6,23 @@ import LiquidGlass from "./components/liquid-glass/LiquidGlass";
 import PreviewPanel from "./components/PreviewPanel";
 import DuplicateFinder from "./components/DuplicateFinder";
 import ZipArchiveModal from "./components/ZipArchiveModal";
-import { 
-  Inbox, 
-  FolderOpen, 
-  ShieldCheck, 
-  Settings, 
-  Sparkles, 
-  Search, 
-  RotateCw, 
-  FolderPlus, 
-  FileText, 
-  Trash2, 
-  HardDrive, 
-  Cloud, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Layers, 
-  Clipboard, 
+import {
+  Inbox,
+  FolderOpen,
+  ShieldCheck,
+  Settings,
+  Sparkles,
+  Search,
+  RotateCw,
+  FolderPlus,
+  FileText,
+  Trash2,
+  HardDrive,
+  Cloud,
+  CheckCircle2,
+  AlertTriangle,
+  Layers,
+  Clipboard,
   Bell,
   Archive,
   Plus,
@@ -32,14 +32,7 @@ import {
   Save,
   TestTube2,
   X,
-  ChevronDown,
   ChevronRight,
-  FileImage,
-  FileArchive,
-  FileSpreadsheet,
-  FileCode,
-  FileVideo,
-  FileAudio,
   Info
 } from "lucide-react";
 
@@ -150,7 +143,7 @@ const getFileIcon = (filename: string, size = 32) => {
 export default function App() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "inbox" | "workspace" | "backup" | "settings" | "duplicates" | "about">("dashboard");
   const [theme, setTheme] = useState<"dark" | "light">("light");
-  const [inboxRightTab, setInboxRightTab] = useState<"archive" | "preview">("archive");
+  // Track whether user is editing metadata mode
 
   // App State Restoration
   const [hoveredWeeklyIndex, setHoveredWeeklyIndex] = useState<number | null>(null);
@@ -273,7 +266,6 @@ export default function App() {
   const projectSubdirs = ["docs", "src", "data", "assets", "models", "output", "test"];
 
   // State: Backup Panel
-  const [consoleLog, setConsoleLog] = useState<string[]>([]);
   const [backupLog, setBackupLog] = useState<string[]>([]);
   const [backupHistory, setBackupHistory] = useState<BackupHistoryRecord[]>([]);
   const [isArchiving, setIsArchiving] = useState(false);
@@ -665,11 +657,6 @@ export default function App() {
   }, []);
 
   // Keyboard shortcuts
-  const saveConfigRef = useRef(handleSaveConfig);
-  saveConfigRef.current = handleSaveConfig;
-  const deleteFileRef = useRef(handleDeleteFile);
-  deleteFileRef.current = handleDeleteFile;
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
@@ -677,8 +664,8 @@ export default function App() {
 
       if (ctrl && e.key === "f") { e.preventDefault(); setActiveTab("workspace"); setTimeout(() => document.querySelector<HTMLInputElement>('.main-content input[type="text"]')?.focus(), 100); }
       else if (ctrl && e.key === "n") { e.preventDefault(); setActiveTab("workspace"); setIsCreateFolderExpanded(true); }
-      else if (ctrl && e.key === "s") { e.preventDefault(); saveConfigRef.current(); }
-      else if (e.key === "Delete" && selectedWorkspaceFile) { e.preventDefault(); deleteFileRef.current(selectedWorkspaceFile.filepath.toString()); }
+      else if (ctrl && e.key === "s") { e.preventDefault(); handleSaveConfig(); }
+      else if (e.key === "Delete" && selectedWorkspaceFile) { e.preventDefault(); handleDeleteFile(selectedWorkspaceFile.filepath.toString()); }
       else if (ctrl && e.key === "1") { e.preventDefault(); setActiveTab("dashboard"); }
       else if (ctrl && e.key === "2") { e.preventDefault(); setActiveTab("inbox"); }
       else if (ctrl && e.key === "3") { e.preventDefault(); setActiveTab("workspace"); }
@@ -875,8 +862,7 @@ export default function App() {
   }, [selectedInboxFile]);
 
   const addLog = (msg: string) => {
-    const time = new Date().toLocaleTimeString();
-    setConsoleLog(prev => [`[${time}] ${msg}`, ...prev]);
+    console.log(`[${new Date().toLocaleTimeString()}] ${msg}`);
   };
 
   const addBackupLog = (msg: string) => {
@@ -2286,7 +2272,6 @@ export default function App() {
                               setSelectedInboxFile(file);
                               const dotIdx = file.filename.toString().lastIndexOf(".");
                               setTopicName(dotIdx > 0 ? file.filename.toString().substring(0, dotIdx) : file.filename.toString());
-                              setInboxRightTab("archive");
                               setRemark("");
                               setVersion("v1.0");
                               setFileStatus("#待处理");
@@ -4605,7 +4590,7 @@ export default function App() {
                 const nameWithoutExt = contextMenu.file.filename.includes(".") 
                   ? contextMenu.file.filename.substring(0, contextMenu.file.filename.lastIndexOf("."))
                   : contextMenu.file.filename;
-                setRenameNewNameInput(nameWithoutExt);
+                setRenameNewNameInput(nameWithoutExt.toString());
                 setRenameModalShow(true);
               }
               setContextMenu(prev => ({ ...prev, show: false }));

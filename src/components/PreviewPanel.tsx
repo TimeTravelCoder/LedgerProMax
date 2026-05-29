@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import LiquidGlass from "./liquid-glass/LiquidGlass";
-import { X, Maximize2, Minimize2, FileText, Image as ImageIcon, Archive, ExternalLink } from "lucide-react";
+import { X, FileText, Image as ImageIcon, Archive, ExternalLink } from "lucide-react";
 
 interface PreviewPanelProps {
   workspaceDir: string;
@@ -59,7 +57,6 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
   const isOldDoc = fileExt === ".doc";
   const isSpreadsheet = [".xls", ".xlsx"].includes(fileExt);
   const isPresentation = [".ppt", ".pptx"].includes(fileExt);
-  const isOffice = isDocx || isOldDoc || isSpreadsheet || isPresentation;
   const isBinary = [".zip", ".rar", ".7z", ".exe", ".dll", ".dmg", ".pkg", ".tar", ".gz"].includes(fileExt);
 
   // Absolute path of the file for local preview
@@ -355,7 +352,6 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
       const lines = content.split("\n");
       let insideCodeBlock = false;
       let codeBlockContent: string[] = [];
-      let codeBlockOpenIdx = -1;
       const isLightTheme = theme === "light";
 
       return (

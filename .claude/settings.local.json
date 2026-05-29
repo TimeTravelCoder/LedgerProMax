@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh auth *)"
+      "Bash(gh auth *)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)"
     ]
   }
 }
