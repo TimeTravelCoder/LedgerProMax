@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Ledger Pro Max",
   "version": "1.0.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.timetravelcoder.ledgerpromax",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -41,6 +41,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "wix": {
+        "language": "zh-CN"
+      },
+      "nsis": {
+        "languages": ["SimpChinese", "English"],
+        "installerIcon": "icons/icon.ico"
+      }
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }
