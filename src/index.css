@@ -1587,3 +1587,17 @@ input[type="checkbox"]:checked::after {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ==================== SELECT OPTION NATIVE VISIBILITY PROTECTION ==================== */
+select option {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+[data-theme="light"] select option {
+  background: #ffffff !important;
+  color: #333333 !important;
+}
+[data-theme="dark"] select option {
+  background: #1e1e1e !important;
+  color: #eeeeee !important;
+}

@@ -817,7 +817,8 @@ export default function App() {
         if (extensionFilter) {
           filtered = filtered.filter(f => {
             if (!f.filename) return false;
-            const ext = f.filename.substring(f.filename.lastIndexOf(".")).toLowerCase();
+            const dotIdx = f.filename.lastIndexOf(".");
+            const ext = dotIdx > 0 ? f.filename.substring(dotIdx).toLowerCase() : "";
             switch (extensionFilter) {
               case "pdf":
                 return ext === ".pdf";
@@ -841,9 +842,9 @@ export default function App() {
       }
     };
     triggerSearch();
-    return () => { cancelled = true; };
     // Reset render limit when filters change
     setListRenderLimit(50);
+    return () => { cancelled = true; };
   }, [searchQuery, selectedCategory, selectedTagsFilter, statusFilter, extensionFilter, searchVersion]);
 
   // Tag Recommendations & Rules Suggestion when selecting inbox file
@@ -2970,11 +2971,11 @@ export default function App() {
                       outline: "none"
                     }}
                   >
-                    <option value="">状态不限</option>
-                    <option value="#待处理">#待处理</option>
-                    <option value="#进行中">#进行中</option>
-                    <option value="#已完成">#已完成</option>
-                    <option value="#非常重要">#非常重要</option>
+                    <option value="" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>🏷️ 状态不限</option>
+                    <option value="#待处理" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>🔴 #待处理</option>
+                    <option value="#进行中" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>🟡 #进行中</option>
+                    <option value="#已完成" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>🟢 #已完成</option>
+                    <option value="#非常重要" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>🔥 #非常重要</option>
                   </select>
 
                   <select 
@@ -2992,12 +2993,12 @@ export default function App() {
                       cursor: "pointer"
                     }}
                   >
-                    <option value="">文件类型不限</option>
-                    <option value="pdf">📄 PDF 文档</option>
-                    <option value="image">🖼️ 图片图像</option>
-                    <option value="doc">📝 工作文档</option>
-                    <option value="code">💻 代码配置</option>
-                    <option value="archive">📦 压缩归档</option>
+                    <option value="" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>📂 文件类型不限</option>
+                    <option value="pdf" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>📄 PDF 文档</option>
+                    <option value="image" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>🖼️ 图片图像</option>
+                    <option value="doc" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>📝 工作文档</option>
+                    <option value="code" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>💻 代码配置</option>
+                    <option value="archive" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>📦 压缩归档</option>
                   </select>
 
                   {/* Hot tags list */}
