@@ -49,21 +49,21 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
     }
   };
 
-  // Keep the oldest file in each group, check all other newer copies for deletion
+  // Keep the newest file in each group (the latest modified copy) and mark all other older copies for deletion.
   const handleAutoSelect = () => {
     const toDelete: string[] = [];
     Object.values(duplicateGroups).forEach(group => {
       if (group.length <= 1) return;
       
-      // Sort group: oldest first (minimum modified_time)
+      // Sort group: newest first (maximum modified_time descending)
       const sorted = [...group].sort((a, b) => b.modified_time - a.modified_time);
-      // Keep the first (newest), mark the rest for deletion
+      // Keep the first (newest, index 0), mark all older ones (index >= 1) for deletion
       for (let i = 1; i < sorted.length; i++) {
         toDelete.push(sorted[i].filepath.toString());
       }
     });
     setCheckedFiles(toDelete);
-    addLog(`智能推荐勾选完成！已推荐选中 ${toDelete.length} 个冗余多余副本。`);
+    addLog(`智能推荐勾选完成！已遵循【保留最新修改版本】原则推荐选中 ${toDelete.length} 个较旧的多余副本。`);
   };
 
   const handleToggleCheck = (filepath: string) => {
@@ -82,6 +82,7 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
     setLoading(true);
     let deletedCount = 0;
     let errorCount = 0;
+    const failedPaths: string[] = [];
 
     for (const filepath of checkedFiles) {
       try {
@@ -90,10 +91,15 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
       } catch (err) {
         console.error(`Failed to delete duplicate ${filepath}:`, err);
         errorCount++;
+        failedPaths.push(filepath);
       }
     }
 
     addLog(`重复清理完毕！成功清理 ${deletedCount} 个副本文件${errorCount > 0 ? `，失败 ${errorCount} 个` : ""}`);
+    if (failedPaths.length > 0) {
+      addLog(`[警告] 以下 ${failedPaths.length} 个重复文件删除失败:`);
+      failedPaths.forEach(p => addLog(` - ${p}`));
+    }
     setCheckedFiles([]);
     
     // Rescan duplicates after cleanup

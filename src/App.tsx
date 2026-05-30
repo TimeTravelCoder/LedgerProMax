@@ -4502,6 +4502,8 @@ export default function App() {
                 </div>
               </>
               )}
+            </div>
+          )}
 
           {/* 5. DUPLICATES TAB */}
           {activeTab === "duplicates" && (
