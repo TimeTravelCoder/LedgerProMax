@@ -1009,20 +1009,39 @@ export default function App() {
   const handleRunBackup = async (type: "disk" | "cloud") => {
     if (isBackingUp) return;
     const targetDir = type === "disk" ? backupDiskDir : backupCloudDir;
+    const label = type === "disk" ? "外部硬盘" : "云盘";
     if (!targetDir.trim()) {
-      const label = type === "disk" ? "外部硬盘" : "云盘";
       addBackupLog(`[错误] ${label}备份路径未配置，请在控制面板中设置后再执行备份。`);
       showToast(`请先在控制面板中配置${label}备份路径`, "warning");
       return;
     }
+    
     setIsBackingUp(true);
-    addBackupLog(`正在向 ${type === "disk" ? "硬盘" : "云盘"} 备份数据 (${targetDir})...`);
+    addBackupLog(`正在校验 ${label} 备份路径可读写可用性...`);
+    
+    try {
+      const validation: PathValidation = await invoke("validate_path", { path: targetDir, shouldExist: false, requireWritable: true });
+      if (!validation.writable) {
+        addBackupLog(`[错误] ${label}备份路径校验未通过: ${validation.message || "无写权限"}`);
+        showToast(`路径不可写入，请检查物理设备挂载状态！`, "error");
+        setIsBackingUp(false);
+        return;
+      }
+    } catch (err) {
+      addBackupLog(`[错误] 路径校验服务连接异常: ${err}`);
+      showToast(`路径校验失败，请检查设置面板中路径格式。`, "error");
+      setIsBackingUp(false);
+      return;
+    }
+    
+    addBackupLog(`路径校验通过！正在向 ${label} 增量同步数据 (${targetDir})...`);
     try {
       const msg: string = await invoke("perform_backup", { backupType: type, workspaceDir, destDir: targetDir });
       addBackupLog(msg);
       await handleRefreshData();
     } catch (err: any) {
-      addBackupLog(`[错误] 备份失败: ${err}`);
+      addBackupLog(`[错误] 备份执行失败: ${err}`);
+      showToast(`备份失败: ${err}`, "error");
     } finally {
       setIsBackingUp(false);
     }
@@ -1106,6 +1125,84 @@ export default function App() {
     } catch (err: any) {
       addLog(`[错误] 归档失败: ${err}`);
       showToast(`归档失败: ${err}`, "error");
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
+  // Lightning 1-click Archive for Inbox files
+  const handleLightningArchive = async (file: FileRecord) => {
+    if (isArchiving) return;
+    setIsArchiving(true);
+    try {
+      // 1. Get recommendation
+      const tags: string[] = await invoke("recommend_tags", {
+        filename: file.filename,
+        remark: "",
+        activeTags: [],
+        topK: 3
+      });
+      const chosenTags = tags.slice(0, 2);
+
+      const suggestion: [string, string] | null = await invoke("suggest_rule_target", {
+        filename: file.filename,
+        autoRules: autoRulesState,
+        standardDirs
+      });
+      
+      const targetCategory = suggestion ? suggestion[1] : (standardDirs.find(d => d !== inboxName) || "01Courses");
+      
+      // 2. Format name using active template
+      const dotIdx = file.filename.toString().lastIndexOf(".");
+      const ext = dotIdx > 0 ? file.filename.toString().substring(dotIdx) : "";
+      const baseName = dotIdx > 0 ? file.filename.toString().substring(0, dotIdx) : file.filename.toString();
+      const today = new Date().toISOString().substring(0, 10).replace(/-/g, "");
+      
+      let formattedName = "";
+      const activeTpl = namingTemplates.find(t => t.key === selectedTemplate);
+      const cleanStatus = "待处理";
+      if (activeTpl) {
+        let result = activeTpl.pattern;
+        result = result.replace(/{date}/g, today);
+        result = result.replace(/{topic}/g, baseName);
+        result = result.replace(/{version}/g, "v1.0");
+        result = result.replace(/{status}/g, cleanStatus);
+        formattedName = `${result}${ext}`;
+      } else {
+        formattedName = `${today}_${baseName}_v1.0_${cleanStatus}${ext}`;
+      }
+      
+      const destRel = `${targetCategory}/${formattedName}`;
+      
+      // 3. Move file
+      const finalRel: string = await invoke("organize_file", {
+        workspaceDir,
+        srcPath: `${workspaceDir}/${file.filepath}`,
+        destRelPath: destRel,
+        newFilename: formattedName
+      });
+      
+      // 4. Update tags
+      const finalTags = [...chosenTags, "#待处理"];
+      await invoke("update_file_tags", { workspaceDir, filepath: finalRel, tags: finalTags });
+      
+      addLog(`[闪电归档] 归档成功: ${file.filename} -> ${destRel}`);
+      showToast(`闪电归档成功！智能分类至: ${targetCategory}`, "success");
+      
+      setUndoStack(prev => [{action: `闪电归档 ${file.filename} → ${destRel}`, filepath: finalRel, timestamp: Date.now()}, ...prev].slice(0, 20));
+      
+      // If the current file was also selected, reset the selection
+      if (selectedInboxFile?.filepath === file.filepath) {
+        setSelectedInboxFile(null);
+        setTopicName("");
+        setRemark("");
+        setChosenTags([]);
+      }
+      
+      await handleRefreshData();
+    } catch (err: any) {
+      addLog(`[错误] 闪电归档失败: ${err}`);
+      showToast(`闪电归档失败: ${err}`, "error");
     } finally {
       setIsArchiving(false);
     }
@@ -1965,11 +2062,12 @@ export default function App() {
                             left: `${weeklyTooltipPos.x}px`,
                             top: `${weeklyTooltipPos.y}px`,
                             transform: "translateX(-50%)",
-                            background: "var(--bg-secondary)",
-                            border: "1px solid var(--border-light)",
+                            background: "rgba(10, 11, 16, 0.85)",
+                            backdropFilter: "blur(12px)",
+                            border: "1px solid rgba(129, 140, 248, 0.3)",
                             borderRadius: "8px",
-                            padding: "6px 10px",
-                            boxShadow: "var(--shadow-lg)",
+                            padding: "8px 12px",
+                            boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.37), 0 0 10px rgba(129, 140, 248, 0.2)",
                             pointerEvents: "none",
                             zIndex: 100,
                             display: "flex",
@@ -2334,6 +2432,39 @@ export default function App() {
                               })}
                             </div>
                             <span style={{fontSize: "12px", color: "var(--text-secondary)", whiteSpace: "nowrap"}}>{formatSize(file.file_size)}</span>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await handleLightningArchive(file);
+                              }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "4px 8px",
+                                fontSize: "11px",
+                                background: "rgba(251, 191, 36, 0.08)",
+                                border: "1px solid rgba(251, 191, 36, 0.2)",
+                                color: "#fbbf24",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                transition: "all 0.2s ease",
+                                fontWeight: 600,
+                                flexShrink: 0
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "rgba(251, 191, 36, 0.18)";
+                                e.currentTarget.style.boxShadow = "0 0 8px rgba(251, 191, 36, 0.3)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "rgba(251, 191, 36, 0.08)";
+                                e.currentTarget.style.boxShadow = "none";
+                              }}
+                              title="闪电一键智能归档"
+                            >
+                              <span>⚡</span>
+                              <span>智能归档</span>
+                            </button>
                             <span style={{width: "1px", height: "18px", background: "var(--border-light)", flexShrink: 0}} />
                             <button
                               className="btn"
@@ -3592,95 +3723,246 @@ export default function App() {
 
           {/* 3. BACKUP TAB */}
           {activeTab === "backup" && (
-            <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", height: "100%"}}>
-              {/* Left Column: Backup Executions */}
-              <div style={{display: "flex", flexDirection: "column", gap: "20px", minHeight: 0}}>
-                <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px"}}>
-                  {/* Disk Backup card */}
-                  <div style={{display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", transition: "border-color 0.15s ease"}}>
-                    <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
-                      <div style={{background: "var(--color-primary-glow)", padding: "8px", borderRadius: "8px", color: "var(--color-primary)"}}>
-                        <HardDrive size={22} />
-                      </div>
-                      <h3 style={{fontSize: "15px", fontWeight: 600}}>外部存储介质备份</h3>
-                    </div>
-                    <p style={{fontSize: "12px", color: "var(--text-secondary)"}}>将工作空间所有数据安全镜像备份到移动硬盘或本地闪存卡中。</p>
-                    <button className="btn btn-primary" onClick={() => handleRunBackup("disk")} disabled={isBackingUp} style={{width: "100%", justifyContent: "center", opacity: isBackingUp ? 0.6 : 1}}>
-                      开始增量备份
-                    </button>
+            <div style={{display: "flex", flexDirection: "column", gap: "20px", height: "100%", overflow: "hidden"}}>
+              {/* 3-2-1 Laser Topology Header Card */}
+              <div className="cyber-card" style={{
+                background: "rgba(255, 255, 255, 0.02)",
+                backdropFilter: "blur(20px)",
+                border: "1px solid var(--border-light)",
+                borderRadius: "16px",
+                padding: "20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                flexShrink: 0
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <h3 style={{ fontSize: "15px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px", margin: 0 }}>
+                      🛡️ 3-2-1 数据灾备全息健康拓扑
+                    </h3>
+                    <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "4px 0 0 0" }}>
+                      数据容灾的殿堂级防线：3份数据、2种介质（本地电脑+外置硬盘）、1份异地备份（私有云盘）。
+                    </p>
                   </div>
-
-                  {/* Cloud Backup card */}
-                  <div style={{display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", transition: "border-color 0.15s ease"}}>
-                    <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
-                      <div style={{background: "var(--color-success-glow)", padding: "8px", borderRadius: "8px", color: "var(--color-success)"}}>
-                        <Cloud size={22} />
-                      </div>
-                      <h3 style={{fontSize: "15px", fontWeight: 600}}>私有云盘异地备份</h3>
-                    </div>
-                    <p style={{fontSize: "12px", color: "var(--text-secondary)"}}>同步数据至百度云/坚果云/OneDrive等挂载盘完成异地多活备份。</p>
-                    <button className="btn" onClick={() => handleRunBackup("cloud")} style={{width: "100%", justifyContent: "center", borderColor: "var(--color-success)", color: "var(--color-success)"}}>
-                      开始云盘备份
-                    </button>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <span className="badge" style={{
+                      background: hasDiskBackup && hasCloudBackup ? "rgba(16, 185, 129, 0.1)" : "rgba(245, 158, 11, 0.1)",
+                      color: hasDiskBackup && hasCloudBackup ? "#10b981" : "#f59e0b",
+                      border: `1px solid ${hasDiskBackup && hasCloudBackup ? "rgba(16, 185, 129, 0.2)" : "rgba(245, 158, 11, 0.2)"}`,
+                      fontSize: "10px",
+                      fontWeight: 600
+                    }}>
+                      {hasDiskBackup && hasCloudBackup ? "🔒 异地高活防灾已激活" : "⚠️ 数据防灾待完善"}
+                    </span>
                   </div>
                 </div>
 
-                {/* Active backup terminal console */}
-                <div style={{flex: 1, display: "flex", flexDirection: "column", gap: "12px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", minHeight: 0}}>
-                  <h4 style={{fontSize: "13px", fontWeight: 600, flexShrink: 0}}>💻 实时备份监控控制台</h4>
-                  <div style={{
-                    flex: 1,
-                    minHeight: 0,
-                    background: "#0a0b10",
-                    borderRadius: "10px",
-                    padding: "16px",
-                    fontFamily: "var(--mono)",
-                    fontSize: "12px",
-                    color: "#10b981",
-                    overflowY: "auto",
-                    display: "flex",
-                    flexDirection: "column"
-                  }}>
-                    {backupLog.length === 0 ? (
-                      <span style={{color: "#4b5563"}}>等待备份任务启动...</span>
-                    ) : (
-                      [...backupLog].reverse().map((log, idx) => (
-                        <div key={idx} style={{marginBottom: "4px"}}>{log}</div>
-                      ))
-                    )}
-                  </div>
+                {/* SVG 3-2-1 Canvas */}
+                <div style={{ position: "relative", height: "100px", width: "100%", background: "rgba(0,0,0,0.2)", borderRadius: "10px", overflow: "hidden", display: "flex", alignItems: "center" }}>
+                  <svg width="100%" height="100%" viewBox="0 0 800 100" style={{ overflow: "visible" }}>
+                    <defs>
+                      <linearGradient id="laserGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#818cf8" />
+                        <stop offset="50%" stopColor="#a78bfa" />
+                        <stop offset="100%" stopColor="#34d399" />
+                      </linearGradient>
+                      <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="3" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                      </filter>
+                    </defs>
+
+                    {/* Flowing Laser paths connecting the nodes */}
+                    <path
+                      d="M 180 50 L 380 50"
+                      fill="none"
+                      stroke={hasDiskBackup ? "url(#laserGrad)" : "rgba(255, 255, 255, 0.1)"}
+                      strokeWidth={hasDiskBackup ? "3" : "1.5"}
+                      strokeDasharray={hasDiskBackup ? "10, 15" : "none"}
+                      style={{
+                        animation: hasDiskBackup ? "laserFlow 1.5s linear infinite" : "none",
+                        filter: hasDiskBackup ? "url(#neonGlow)" : "none"
+                      }}
+                    />
+
+                    <path
+                      d="M 180 50 Q 390 10, 600 50"
+                      fill="none"
+                      stroke={hasCloudBackup ? "url(#laserGrad)" : "rgba(255, 255, 255, 0.1)"}
+                      strokeWidth={hasCloudBackup ? "3" : "1.5"}
+                      strokeDasharray={hasCloudBackup ? "10, 15" : "none"}
+                      style={{
+                        animation: hasCloudBackup ? "laserFlow 2s linear infinite" : "none",
+                        filter: hasCloudBackup ? "url(#neonGlow)" : "none"
+                      }}
+                    />
+
+                    <path
+                      d="M 420 50 L 600 50"
+                      fill="none"
+                      stroke={hasDiskBackup && hasCloudBackup ? "url(#laserGrad)" : "rgba(255, 255, 255, 0.1)"}
+                      strokeWidth={hasDiskBackup && hasCloudBackup ? "2" : "1.5"}
+                      strokeDasharray={hasDiskBackup && hasCloudBackup ? "5, 10" : "none"}
+                      style={{
+                        animation: hasDiskBackup && hasCloudBackup ? "laserFlow 2.5s linear infinite" : "none",
+                        opacity: 0.7
+                      }}
+                    />
+
+                    <style>{`
+                      @keyframes laserFlow {
+                        0% { stroke-dashoffset: 50; }
+                        100% { stroke-dashoffset: 0; }
+                      }
+                      .topo-node {
+                        transition: transform 0.2s ease, filter 0.2s ease;
+                        cursor: pointer;
+                      }
+                      .topo-node:hover {
+                        transform: scale(1.05);
+                        filter: brightness(1.2);
+                      }
+                    `}</style>
+
+                    {/* Node 1: Computer Host */}
+                    <g className="topo-node" transform="translate(100, 10)">
+                      <circle cx="30" cy="30" r="24" fill="rgba(129, 140, 248, 0.15)" stroke="#818cf8" strokeWidth="2" style={{ filter: "drop-shadow(0 0 6px rgba(129, 140, 248, 0.4))" }} />
+                      <rect x="20" y="22" width="20" height="13" rx="2" fill="none" stroke="#818cf8" strokeWidth="2" />
+                      <line x1="24" y1="35" x2="36" y2="35" stroke="#818cf8" strokeWidth="2" />
+                      <line x1="27" y1="35" x2="27" y2="38" stroke="#818cf8" strokeWidth="2" />
+                      <line x1="33" y1="35" x2="33" y2="38" stroke="#818cf8" strokeWidth="2" />
+                      <line x1="22" y1="41" x2="38" y2="41" stroke="#818cf8" strokeWidth="2" />
+                      <text x="30" y="70" fill="var(--text-primary)" fontSize="10" fontWeight="600" textAnchor="middle">💻 本地工作空间</text>
+                      <text x="30" y="82" fill="#818cf8" fontSize="8" textAnchor="middle">已就绪 (100%)</text>
+                    </g>
+
+                    {/* Node 2: Disk */}
+                    <g className="topo-node" transform="translate(370, 10)">
+                      <circle cx="30" cy="30" r="24"
+                        fill={hasDiskBackup ? "rgba(167, 139, 250, 0.15)" : "rgba(239, 68, 68, 0.15)"}
+                        stroke={hasDiskBackup ? "#a78bfa" : "#ef4444"}
+                        strokeWidth="2"
+                        style={{ filter: `drop-shadow(0 0 6px ${hasDiskBackup ? "rgba(167, 139, 250, 0.4)" : "rgba(239, 68, 68, 0.4)"})` }}
+                      />
+                      <rect x="22" y="20" width="16" height="20" rx="2" fill="none" stroke={hasDiskBackup ? "#a78bfa" : "#ef4444"} strokeWidth="2" />
+                      <circle cx="30" cy="26" r="3" fill="none" stroke={hasDiskBackup ? "#a78bfa" : "#ef4444"} strokeWidth="1.5" />
+                      <line x1="25" y1="36" x2="35" y2="36" stroke={hasDiskBackup ? "#a78bfa" : "#ef4444"} strokeWidth="1.5" />
+                      <text x="30" y="70" fill="var(--text-primary)" fontSize="10" fontWeight="600" textAnchor="middle">💾 本地移动硬盘</text>
+                      <text x="30" y="82" fill={hasDiskBackup ? "#a78bfa" : "#ef4444"} fontSize="8" textAnchor="middle">
+                        {hasDiskBackup ? "已连通 (30分)" : "未绑定 (缺失)"}
+                      </text>
+                    </g>
+
+                    {/* Node 3: Cloud */}
+                    <g className="topo-node" transform="translate(620, 10)">
+                      <circle cx="30" cy="30" r="24"
+                        fill={hasCloudBackup ? "rgba(52, 211, 153, 0.15)" : "rgba(239, 68, 68, 0.15)"}
+                        stroke={hasCloudBackup ? "#34d399" : "#ef4444"}
+                        strokeWidth="2"
+                        style={{ filter: `drop-shadow(0 0 6px ${hasCloudBackup ? "rgba(52, 211, 153, 0.4)" : "rgba(239, 68, 68, 0.4)"})` }}
+                      />
+                      <path d="M 23 32 A 4 4 0 0 1 27 28 A 6 6 0 0 1 37 26 A 5 5 0 0 1 42 32 A 3 3 0 0 1 42 35 L 23 35 Z" fill="none" stroke={hasCloudBackup ? "#34d399" : "#ef4444"} strokeWidth="2" strokeLinejoin="round" />
+                      <text x="30" y="70" fill="var(--text-primary)" fontSize="10" fontWeight="600" textAnchor="middle">☁️ 异地私有云</text>
+                      <text x="30" y="82" fill={hasCloudBackup ? "#34d399" : "#ef4444"} fontSize="8" textAnchor="middle">
+                        {hasCloudBackup ? "已连通 (30分)" : "未配置 (可选)"}
+                      </text>
+                    </g>
+                  </svg>
                 </div>
               </div>
 
-              {/* Right Column: Backup History */}
-              <div style={{display: "flex", flexDirection: "column", gap: "20px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", minHeight: 0}}>
-                <h3 className="card-title" style={{flexShrink: 0}}>📜 备份历史记录列表</h3>
-
-                <div style={{display: "flex", flexDirection: "column", gap: "12px", flex: 1, minHeight: 0, overflowY: "auto"}}>
-                  {backupHistory.length === 0 ? (
-                    <div style={{display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-secondary)"}}>
-                      <AlertTriangle size={32} style={{color: "var(--text-muted)", marginBottom: "12px"}} />
-                      <p style={{fontSize: "13px"}}>暂无历史备份记录，请立即执行您的首次备份！</p>
-                    </div>
-                  ) : (
-                    backupHistory.map((item, idx) => (
-                      <div key={idx} style={{background: theme === "light" ? "rgba(0, 0, 0, 0.02)" : "rgba(255,255,255,0.01)", border: "1px solid var(--border-light)", borderRadius: "10px", padding: "12px 16px"}}>
-                        <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px"}}>
-                          <span style={{fontSize: "13px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px"}}>
-                            {item.backup_type === "disk" ? <HardDrive size={14} style={{color: "var(--color-primary)"}} /> : <Cloud size={14} style={{color: "var(--color-success)"}} />}
-                            {item.backup_type === "disk" ? "本地移动硬盘镜像" : "私有云端归档备份"}
-                          </span>
-                          <span className={`badge ${item.status === "success" ? "badge-success" : "badge-danger"}`} style={{fontSize: "9px"}}>
-                            {item.status}
-                          </span>
+              {/* Lower split grids */}
+              <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", flex: 1, minHeight: 0}}>
+                {/* Left Column: Backup Executions */}
+                <div style={{display: "flex", flexDirection: "column", gap: "20px", minHeight: 0}}>
+                  <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px"}}>
+                    {/* Disk Backup card */}
+                    <div style={{display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", transition: "border-color 0.15s ease"}}>
+                      <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
+                        <div style={{background: "var(--color-primary-glow)", padding: "8px", borderRadius: "8px", color: "var(--color-primary)"}}>
+                          <HardDrive size={22} />
                         </div>
-                        <div style={{display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--text-secondary)"}}>
-                          <span>同步: {item.files_copied}文件 ({formatSize(item.bytes_copied)})</span>
-                          <span>{item.timestamp}</span>
-                        </div>
+                        <h3 style={{fontSize: "15px", fontWeight: 600}}>外部存储介质备份</h3>
                       </div>
-                    ))
-                  )}
+                      <p style={{fontSize: "12px", color: "var(--text-secondary)"}}>将工作空间所有数据安全镜像备份到移动硬盘或本地闪存卡中。</p>
+                      <button className="btn btn-primary" onClick={() => handleRunBackup("disk")} disabled={isBackingUp} style={{width: "100%", justifyContent: "center", opacity: isBackingUp ? 0.6 : 1}}>
+                        开始增量备份
+                      </button>
+                    </div>
+
+                    {/* Cloud Backup card */}
+                    <div style={{display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", transition: "border-color 0.15s ease"}}>
+                      <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
+                        <div style={{background: "var(--color-success-glow)", padding: "8px", borderRadius: "8px", color: "var(--color-success)"}}>
+                          <Cloud size={22} />
+                        </div>
+                        <h3 style={{fontSize: "15px", fontWeight: 600}}>私有云盘异地备份</h3>
+                      </div>
+                      <p style={{fontSize: "12px", color: "var(--text-secondary)"}}>同步数据至百度云/坚果云/OneDrive等挂载盘完成异地多活备份。</p>
+                      <button className="btn" onClick={() => handleRunBackup("cloud")} style={{width: "100%", justifyContent: "center", borderColor: "var(--color-success)", color: "var(--color-success)"}}>
+                        开始云盘备份
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Active backup terminal console */}
+                  <div style={{flex: 1, display: "flex", flexDirection: "column", gap: "12px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", minHeight: 0}}>
+                    <h4 style={{fontSize: "13px", fontWeight: 600, flexShrink: 0}}>💻 实时备份监控控制台</h4>
+                    <div style={{
+                      flex: 1,
+                      minHeight: 0,
+                      background: "#0a0b10",
+                      borderRadius: "10px",
+                      padding: "16px",
+                      fontFamily: "var(--mono)",
+                      fontSize: "12px",
+                      color: "#10b981",
+                      overflowY: "auto",
+                      display: "flex",
+                      flexDirection: "column"
+                    }}>
+                      {backupLog.length === 0 ? (
+                        <span style={{color: "#4b5563"}}>等待备份任务启动...</span>
+                      ) : (
+                        [...backupLog].reverse().map((log, idx) => (
+                          <div key={idx} style={{marginBottom: "4px"}}>{log}</div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Backup History */}
+                <div style={{display: "flex", flexDirection: "column", gap: "20px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", minHeight: 0}}>
+                  <h3 className="card-title" style={{flexShrink: 0}}>📜 备份历史记录列表</h3>
+
+                  <div style={{display: "flex", flexDirection: "column", gap: "12px", flex: 1, minHeight: 0, overflowY: "auto"}}>
+                    {backupHistory.length === 0 ? (
+                      <div style={{display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-secondary)"}}>
+                        <AlertTriangle size={32} style={{color: "var(--text-muted)", marginBottom: "12px"}} />
+                        <p style={{fontSize: "13px"}}>暂无历史备份记录，请立即执行您的首次备份！</p>
+                      </div>
+                    ) : (
+                      backupHistory.map((item, idx) => (
+                        <div key={idx} style={{background: theme === "light" ? "rgba(0, 0, 0, 0.02)" : "rgba(255,255,255,0.01)", border: "1px solid var(--border-light)", borderRadius: "10px", padding: "12px 16px"}}>
+                          <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px"}}>
+                            <span style={{fontSize: "13px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px"}}>
+                              {item.backup_type === "disk" ? <HardDrive size={14} style={{color: "var(--color-primary)"}} /> : <Cloud size={14} style={{color: "var(--color-success)"}} />}
+                              {item.backup_type === "disk" ? "本地移动硬盘镜像" : "私有云端归档备份"}
+                            </span>
+                            <span className={`badge ${item.status === "success" ? "badge-success" : "badge-danger"}`} style={{fontSize: "9px"}}>
+                              {item.status}
+                            </span>
+                          </div>
+                          <div style={{display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--text-secondary)"}}>
+                            <span>同步: {item.files_copied}文件 ({formatSize(item.bytes_copied)})</span>
+                            <span>{item.timestamp}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
