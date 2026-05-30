@@ -4492,40 +4492,74 @@ export default function App() {
                   <span style={{padding: "5px 14px", borderRadius: "99px", background: "var(--color-primary)", color: "#fff", fontSize: "12px", fontWeight: 700}}>v1.2.0</span>
                   <span style={{padding: "5px 14px", borderRadius: "99px", border: "1px solid var(--border-light)", fontSize: "12px", color: "var(--text-secondary)"}}>Windows 旗舰发布版</span>
                 </div>
+              </div>
 
-                {/* Product Story Card */}
-                <div className="cyber-card" style={{marginBottom: "24px"}}>
-                  <h3 className="card-title" style={{fontSize: "15px", fontFamily: "-apple-system, 'SF Pro Display', sans-serif"}}>关于 Pro Max</h3>
-                  <p style={{color: "var(--text-secondary)", fontSize: "13px", lineHeight: 1.8, margin: 0, fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>
-                    <strong style={{color: "#ec4899"}}>Ledger Pro Max (Max_Mac)</strong> 是专为 macOS 平台从零深度适配的旗舰版本。基于 <strong>Tauri v2 + Rust</strong> 构建，原生支持 <strong>Apple Silicon (M1–M4)</strong> 与 Intel 芯片双架构，充分利用 <strong>APFS</strong> 文件系统特性与 <strong>FSEvents</strong> 内核级文件监控。
-                  </p>
-                  <p style={{color: "var(--text-secondary)", fontSize: "13px", lineHeight: 1.8, margin: "12px 0 0 0", fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>
-                    遵循 macOS 设计规范与交互惯例，适配 <strong>深色模式</strong>、<strong>流量灯按钮</strong>、<strong>原生快捷键 (⌘)</strong> 与 <strong>Gatekeeper 安全模型</strong>。以 <strong>DMG 镜像</strong> 分发，支持代码签名与公证，无需 any 模拟层或兼容环境。
-                  </p>
+              {/* Branch lineage — inspired by Ledger Max README */}
+              <div className="cyber-card" style={{marginBottom: "20px"}}>
+                <h3 className="card-title" style={{fontSize: "16px"}}>🧭 分支演进</h3>
+                <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "10px"}}>
+                  {[
+                    ["📁", "master", "基础开源版", "var(--text-secondary)"],
+                    ["🧩", "Plus", "工作区增强版", "#f59e0b"],
+                    ["🛡️", "pro", "安全事务版", "#10b981"],
+                    ["👑", "Max", "Windows 旗舰版", "#6366f1"],
+                    ["🍎", "Max_Mac", "macOS DMG", "#ec4899"],
+                  ].map(([icon, branch, desc, color]) => (
+                    <div key={branch} style={{padding: "12px", borderRadius: "10px", border: "1px solid var(--border-light)", background: "rgba(255,255,255,0.015)", textAlign: "center"}}>
+                      <div style={{fontSize: "20px", marginBottom: "4px"}}>{icon}</div>
+                      <div style={{fontSize: "13px", fontWeight: 700, color}}>{branch}</div>
+                      <div style={{fontSize: "10px", color: "var(--text-muted)", marginTop: "2px"}}>{desc}</div>
+                    </div>
+                  ))}
                 </div>
+                <div style={{marginTop: "14px", padding: "12px", borderRadius: "8px", background: theme === "light" ? "rgba(99,102,241,0.05)" : "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.18)", fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.6, textAlign: "center"}}>
+                  👑 <strong style={{color: "var(--color-primary)"}}>Pro Max</strong> 继承 Max 全部旗舰特性，以 <strong style={{color: "var(--color-primary)"}}>Tauri v2 + React + Rust</strong> 重写，带来原生性能与跨平台能力。
+                </div>
+              </div>
 
-                {/* macOS-Optimized Features — 2-column grid with SF styling */}
-                <div style={{marginBottom: "24px"}}>
-                  <h3 className="card-title" style={{fontSize: "15px", marginBottom: "14px", fontFamily: "-apple-system, 'SF Pro Display', sans-serif"}}>macOS 原生能力</h3>
-                  <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: "10px"}}>
+              {/* Feature highlights — badge grid */}
+              <div style={{marginBottom: "20px"}}>
+                <h3 className="card-title" style={{fontSize: "16px", marginBottom: "12px"}}>✨ 旗舰能力</h3>
+                <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "10px"}}>
+                  {[
+                    ["📥", "智能收集箱", "拖拽投递、命名模板、标签与备注"],
+                    ["📡", "多目录监听", "新文件落地即时提醒整理"],
+                    ["🏷️", "AI 标签推荐", "语义分析自动匹配标签"],
+                    ["🗂️", "分类工作空间", "12 个标准目录 + 拼音搜索"],
+                    ["👁️", "文件预览", "文本/Markdown/图片/PDF/Word"],
+                    ["🔒", "安全归档", "ZIP 打包 + SHA-256 校验"],
+                    ["💾", "3-2-1 备份", "本地/外置/云端三层保护"],
+                    ["🔍", "智能查重", "文件名/大小/哈希三模式"],
+                    ["🎨", "双主题", "赛博暗黑 + 极简明亮"],
+                    ["⌨️", "键盘快捷键", "Ctrl+1~5 快速切换板块"],
+                  ].map(([icon, title, desc]) => (
+                    <div key={title} style={{padding: "14px", borderRadius: "10px", border: "1px solid var(--border-light)", background: "rgba(255,255,255,0.015)", display: "flex", gap: "12px", alignItems: "flex-start"}}>
+                      <span style={{fontSize: "20px", flexShrink: 0}}>{icon}</span>
+                      <div>
+                        <div style={{fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "2px"}}>{title}</div>
+                        <div style={{fontSize: "11px", color: "var(--text-muted)", lineHeight: 1.4}}>{desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tech Stack + System Info — side by side */}
+              <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px"}}>
+                <div className="cyber-card">
+                  <h3 className="card-title" style={{fontSize: "16px"}}>⚙️ 技术栈</h3>
+                  <div style={{display: "flex", flexDirection: "column", gap: "8px"}}>
                     {[
-                      ["🍎", "Universal Binary", "Apple Silicon M1–M4 与 Intel 原生双架构支持，无 Rosetta 损耗"],
-                      ["📡", "FSEvents 文件监控", "内核级实时事件流，低功耗、低延迟，无需轮询"],
-                      ["🗂️", "APFS 深度适配", "快照、克隆、空间共享 — 充分利用 Apple 文件系统特性"],
-                      ["🔐", "Gatekeeper 兼容", "代码签名 + Apple 公证，开箱即用，无安全警告"],
-                      ["🎛️", "原生 UI 惯例", "SF Pro 字体、流量灯按钮、⌘ 快捷键、弹性滚动"],
-                      ["📦", "DMG 原生分发", "拖拽安装至 /Applications，与 macOS 生态无缝集成"],
-                      ["🏷️", "AI 语义标签", "中文 NLP 引擎驱动的智能标签推荐，本地运行零联网"],
-                      ["👁️", "Quick Look style 预览", "图片 / PDF / Markdown / 纯文本 / Word 文档实时预览"],
-                      ["💾", "3-2-1 备份策略", "本地 + 外置卷 + 云盘三层保护，SHA-256 完整性校验"],
-                      ["🔍", "三模式智能查重", "文件名 / 大小 / SHA-256 哈希，精准定位重复资产"],
-                    ].map(([icon, title, desc]) => (
-                      <div key={title} style={{padding: "14px", borderRadius: "10px", border: "1px solid var(--border-light)", background: "rgba(255,255,255,0.015)", display: "flex", gap: "12px", alignItems: "flex-start"}}>
-                        <span style={{fontSize: "20px", flexShrink: 0}}>{icon}</span>
-                        <div>
-                          <div style={{fontSize: "13px", fontWeight: 600, fontFamily: "-apple-system, 'SF Pro Text', sans-serif", color: "var(--text-primary)", marginBottom: "3px"}}>{title}</div>
-                          <div style={{fontSize: "11px", color: "var(--text-muted)", lineHeight: 1.45, fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>{desc}</div>
-                        </div>
+                      ["桌面框架", "Tauri v2 (Rust)"],
+                      ["前端", "React 19 + TypeScript"],
+                      ["构建工具", "Vite 8"],
+                      ["数据库", "SQLite (rusqlite)"],
+                      ["文件监控", "notify (Rust)"],
+                      ["图标", "Lucide React"],
+                    ].map(([k, v]) => (
+                      <div key={k} style={{display: "flex", justifyContent: "space-between", fontSize: "13px"}}>
+                        <span style={{color: "var(--text-muted)"}}>{k}</span>
+                        <span style={{color: "var(--text-primary)", fontWeight: 500}}>{v}</span>
                       </div>
                     ))}
                   </div>
@@ -4548,19 +4582,30 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+              </div>
 
-                {/* Footer */}
-                <div style={{textAlign: "center", padding: "8px 0 48px", fontSize: "12px", color: "var(--text-muted)", fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>
-                  <a href="https://github.com/TimeTravelCoder/LedgerProMax" target="_blank" style={{color: "var(--color-primary)", textDecoration: "none", fontWeight: 600}}>github.com/TimeTravelCoder/LedgerProMax</a>
-                  <span style={{margin: "0 10px"}}>·</span>
-                  <span>🍎 macOS 原生体验 · DMG 拖拽分发 · Apple 公证</span>
-                  <div style={{marginTop: "6px", fontSize: "11px", color: "var(--text-muted)"}}>Made with ❤️ for the Mac community</div>
+              {/* Open source credits */}
+              <div className="cyber-card" style={{marginBottom: "20px"}}>
+                <h3 className="card-title" style={{fontSize: "16px"}}>🙏 开源致谢</h3>
+                <div style={{display: "flex", flexWrap: "wrap", gap: "6px"}}>
+                  {["tauri", "react", "vite", "rusqlite", "notify", "zip-rs", "walkdir", "chrono", "sha2", "regex", "encoding-rs", "serde", "lucide-react", "typescript"].map(d => (
+                    <span key={d} style={{padding: "4px 10px", borderRadius: "6px", background: "rgba(255,255,255,0.025)", border: "1px solid var(--border-light)", fontSize: "11px", color: "var(--text-secondary)", fontFamily: "monospace"}}>{d}</span>
+                  ))}
                 </div>
-              </>
+              </div>
+
+              {/* Footer */}
+              <div style={{textAlign: "center", padding: "8px 0 40px", fontSize: "13px", color: "var(--text-muted)"}}>
+                <a href="https://github.com/TimeTravelCoder/LedgerProMax" target="_blank" style={{color: "var(--color-primary)", textDecoration: "none", fontWeight: 600}}>github.com/TimeTravelCoder/LedgerProMax</a>
+                <span style={{margin: "0 12px"}}>·</span>
+                <span>Built for knowledge workers</span>
+              </div>
             </div>
           )}
 
           {/* 5. DUPLICATES TAB */}
+          
+
           {activeTab === "duplicates" && (
             <DuplicateFinder 
               workspaceDir={workspaceDir} 
