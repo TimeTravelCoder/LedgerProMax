@@ -36,6 +36,19 @@ export default function ZipArchiveModal({
       setProgress(100);
     } else if (status === "idle" || status === "error") {
       setProgress(0);
+    } else if (status === "compressing") {
+      setProgress(10);
+      const timer = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 92) {
+            clearInterval(timer);
+            return 92;
+          }
+          const increment = Math.floor(Math.random() * 6) + 2; // Random 2% - 7%
+          return Math.min(prev + increment, 92);
+        });
+      }, 250);
+      return () => clearInterval(timer);
     }
   }, [status]);
 

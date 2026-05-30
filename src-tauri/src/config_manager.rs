@@ -41,7 +41,12 @@ pub struct AppConfig {
 
 impl Default for AppConfig {
     fn default() -> Self {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("C:\\"));
+        let home = dirs::home_dir().unwrap_or_else(|| {
+            #[cfg(target_os = "windows")]
+            { PathBuf::from("C:\\") }
+            #[cfg(not(target_os = "windows"))]
+            { PathBuf::from("/") }
+        });
         let default_workspace = dirs::config_dir()
             .map(|p| p.join("Ledger").join("Workspace"))
             .unwrap_or_else(|| home.join("Ledger").join("Workspace"));
@@ -136,7 +141,12 @@ impl ConfigManager {
             .unwrap_or_else(|| {
                 dirs::home_dir()
                     .map(|p| p.join(".ledger"))
-                    .unwrap_or_else(|| PathBuf::from("C:\\Ledger"))
+                    .unwrap_or_else(|| {
+                        #[cfg(target_os = "windows")]
+                        { PathBuf::from("C:\\Ledger") }
+                        #[cfg(not(target_os = "windows"))]
+                        { PathBuf::from("/tmp/Ledger") }
+                    })
             });
         
         let _ = fs::create_dir_all(&base_dir);

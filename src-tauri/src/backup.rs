@@ -37,13 +37,25 @@ impl BackupManager {
             return Err("安全拦截：备份目标目录不能设定在工作空间内部，否则会导致循环套娃备份！".to_string());
         }
 
-        // Check if drive partition is online (on Windows, check anchor root existence)
+        // Check if storage medium is online
         if let Some(anchor) = dest_abs.ancestors().last() {
             if !anchor.exists() {
-                return Err(format!(
+                #[cfg(target_os = "windows")]
+                let msg = format!(
                     "备份存储介质不可用，请确认对应的驱动器或盘符 '{:?}' 已正确连接并挂载！",
                     anchor
-                ));
+                );
+                #[cfg(target_os = "macos")]
+                let msg = format!(
+                    "备份存储介质不可用，请确认对应的存储卷 '{:?}' 已正确连接并挂载！",
+                    anchor
+                );
+                #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+                let msg = format!(
+                    "备份存储介质不可用，请确认对应的挂载点 '{:?}' 已正确连接！",
+                    anchor
+                );
+                return Err(msg);
             }
         }
 

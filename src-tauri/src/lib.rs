@@ -88,13 +88,26 @@ fn rename_file(workspace_dir: String, old_filepath: String, new_filepath: String
     // 3. Perform physical rename with security and conflict checks
     if old_abs_path.exists() {
         if new_abs_path.exists() {
-            // Support case-only renames (e.g. file.txt -> File.txt on Windows)
+            // Support case-only renames (e.g. file.txt -> File.txt).
+            // On case-insensitive filesystems (Windows NTFS, macOS APFS default),
+            // fs::rename may appear to succeed but not actually change the case
+            // on disk. We force a three-step rename (temp file) to ensure the
+            // filesystem updates the casing of the entry correctly.
             let is_case_change = old_abs_path.to_string_lossy().to_lowercase() == new_abs_path.to_string_lossy().to_lowercase();
             if !is_case_change {
                 return Err("目标文件名已存在！".to_string());
+            } else {
+                let temp_ext = format!("case_temp_{}", chrono::Utc::now().timestamp_millis());
+                let temp_path = old_abs_path.with_extension(&temp_ext);
+                fs::rename(&old_abs_path, &temp_path).map_err(|e| format!("物理文件临时命名失败: {}", e))?;
+                fs::rename(&temp_path, &new_abs_path).map_err(|e| {
+                    let _ = fs::rename(&temp_path, &old_abs_path); // Attempt rollback
+                    format!("物理文件重命名失败: {}", e)
+                })?;
             }
+        } else {
+            fs::rename(&old_abs_path, &new_abs_path).map_err(|e| format!("物理文件重命名失败: {}", e))?;
         }
-        fs::rename(&old_abs_path, &new_abs_path).map_err(|e| format!("物理文件重命名失败: {}", e))?;
     } else {
         return Err(format!("源文件不存在: {}", old_filepath));
     }
@@ -303,7 +316,8 @@ fn read_file_content(workspace_dir: String, filepath: String) -> Result<String, 
     if let Ok(utf8_str) = String::from_utf8(buffer.clone()) {
         Ok(utf8_str)
     } else {
-        // 如果失败，回退到 Windows 常见的 GBK 解码
+        // 如果失败，回退到常见的 GBK 解码（主要针对从 Windows 复制的中文文件，
+        // 在 macOS/Linux 上几乎不会触发，因为这两个系统原生使用 UTF-8）
         let (decoded, _, _) = encoding_rs::GBK.decode(&buffer);
         Ok(decoded.into_owned())
     }
@@ -349,47 +363,6 @@ fn open_in_system(workspace_dir: String, filepath: String) -> Result<(), String>
             .map_err(|e| e.to_string())?;
     }
     Ok(())
-}
-
-#[tauri::command]
-fn select_directory() -> Result<String, String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::process::Command;
-        let script = r#"
-            Add-Type -AssemblyName System.Windows.Forms;
-            $f = New-Object System.Windows.Forms.FolderBrowserDialog;
-            $f.Description = '请选择目标备份或工作空间目录';
-            $f.ShowNewFolderButton = $true;
-            if ($f.ShowDialog() -eq 'OK') {
-                Write-Output $f.SelectedPath
-            }
-        "#;
-        
-        let output = Command::new("powershell")
-            .arg("-NoProfile")
-            .arg("-Command")
-            .arg(script)
-            .output()
-            .map_err(|e| e.to_string())?;
-            
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if path.is_empty() {
-                Err("USER_CANCELLED".to_string())
-            } else {
-                Ok(path)
-            }
-        } else {
-            let err_msg = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            Err(format!("目录选择失败: {}", err_msg))
-        }
-    }
-    
-    #[cfg(not(target_os = "windows"))]
-    {
-        Err("该平台暂不支持原生目录选择器".to_string())
-    }
 }
 
 lazy_static::lazy_static! {
@@ -444,6 +417,8 @@ pub fn run() {
         .manage(WatcherState {
             manager: watcher::WatcherManager::new(),
         })
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_os::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -483,7 +458,6 @@ pub fn run() {
             archive_to_zip,
             find_duplicates,
             open_in_system,
-            select_directory,
             read_docx_text
         ])
         .run(tauri::generate_context!())
