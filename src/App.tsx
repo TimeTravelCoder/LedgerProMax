@@ -252,7 +252,6 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedTagsFilter, setSelectedTagsFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("");
-  const [extensionFilter, setExtensionFilter] = useState<string>("");
   
   // State: File Rename Modal
   const [renameModalShow, setRenameModalShow] = useState(false);
@@ -813,28 +812,7 @@ export default function App() {
           filtered = filtered.filter(f => f.filepath.replace(/\\/g, "/").startsWith(selectedCategory + "/"));
         }
 
-        // Apply extensionFilter if selected
-        if (extensionFilter) {
-          filtered = filtered.filter(f => {
-            if (!f.filename) return false;
-            const dotIdx = f.filename.lastIndexOf(".");
-            const ext = dotIdx > 0 ? f.filename.substring(dotIdx).toLowerCase() : "";
-            switch (extensionFilter) {
-              case "pdf":
-                return ext === ".pdf";
-              case "image":
-                return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"].includes(ext);
-              case "doc":
-                return [".doc", ".docx", ".txt", ".md", ".xlsx", ".xls", ".csv", ".ppt", ".pptx"].includes(ext);
-              case "code":
-                return [".py", ".js", ".ts", ".tsx", ".jsx", ".json"].includes(ext);
-              case "archive":
-                return [".zip", ".rar", ".7z", ".tar", ".gz"].includes(ext);
-              default:
-                return true;
-            }
-          });
-        }
+
 
         if (!cancelled) setWorkspaceFiles(filtered);
       } catch (err) {
@@ -845,7 +823,7 @@ export default function App() {
     // Reset render limit when filters change
     setListRenderLimit(50);
     return () => { cancelled = true; };
-  }, [searchQuery, selectedCategory, selectedTagsFilter, statusFilter, extensionFilter, searchVersion]);
+  }, [searchQuery, selectedCategory, selectedTagsFilter, statusFilter, searchVersion]);
 
   // Tag Recommendations & Rules Suggestion when selecting inbox file
   useEffect(() => {
@@ -2978,28 +2956,6 @@ export default function App() {
                     <option value="#非常重要" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>🔥 #非常重要</option>
                   </select>
 
-                  <select 
-                    value={extensionFilter} 
-                    onChange={(e) => setExtensionFilter(e.target.value)}
-                    style={{
-                      width: "140px", 
-                      padding: "6px 12px", 
-                      fontSize: "13px",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-light)",
-                      background: theme === "light" ? "#fff" : "rgba(0,0,0,0.2)",
-                      color: "var(--text-primary)",
-                      outline: "none",
-                      cursor: "pointer"
-                    }}
-                  >
-                    <option value="" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>📂 文件类型不限</option>
-                    <option value="pdf" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>📄 PDF 文档</option>
-                    <option value="image" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>🖼️ 图片图像</option>
-                    <option value="doc" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>📝 工作文档</option>
-                    <option value="code" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>💻 代码配置</option>
-                    <option value="archive" style={{ background: theme === "light" ? "#fff" : "#1e1e1e", color: theme === "light" ? "#333" : "#eee" }}>📦 压缩归档</option>
-                  </select>
 
                   {/* Hot tags list */}
                   <div style={{display: "flex", gap: "8px", flexWrap: "wrap", flex: 1, paddingBottom: "4px"}}>
@@ -3090,7 +3046,7 @@ export default function App() {
                       <div style={{display: "flex", gap: "10px", marginTop: "20px"}}>
                         <button 
                           className="btn" 
-                          onClick={() => { setSelectedCategory(null); setSearchQuery(""); setStatusFilter(""); setExtensionFilter(""); setSelectedTagsFilter([]); }}
+                          onClick={() => { setSelectedCategory(null); setSearchQuery(""); setStatusFilter(""); setSelectedTagsFilter([]); }}
                           style={{
                             padding: "6px 14px",
                             fontSize: "11px",
