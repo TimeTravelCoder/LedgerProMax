@@ -91,14 +91,23 @@ fn rename_file(workspace_dir: String, old_filepath: String, new_filepath: String
             // Support case-only renames (e.g. file.txt -> File.txt).
             // On case-insensitive filesystems (Windows NTFS, macOS APFS default),
             // fs::rename may appear to succeed but not actually change the case
-            // on disk. The DB record is still updated so the app remains
-            // consistent — the OS simply treats both cases as the same file.
+            // on disk. We force a three-step rename (temp file) to ensure the
+            // filesystem updates the casing of the entry correctly.
             let is_case_change = old_abs_path.to_string_lossy().to_lowercase() == new_abs_path.to_string_lossy().to_lowercase();
             if !is_case_change {
                 return Err("目标文件名已存在！".to_string());
+            } else {
+                let temp_ext = format!("case_temp_{}", chrono::Utc::now().timestamp_millis());
+                let temp_path = old_abs_path.with_extension(&temp_ext);
+                fs::rename(&old_abs_path, &temp_path).map_err(|e| format!("物理文件临时命名失败: {}", e))?;
+                fs::rename(&temp_path, &new_abs_path).map_err(|e| {
+                    let _ = fs::rename(&temp_path, &old_abs_path); // Attempt rollback
+                    format!("物理文件重命名失败: {}", e)
+                })?;
             }
+        } else {
+            fs::rename(&old_abs_path, &new_abs_path).map_err(|e| format!("物理文件重命名失败: {}", e))?;
         }
-        fs::rename(&old_abs_path, &new_abs_path).map_err(|e| format!("物理文件重命名失败: {}", e))?;
     } else {
         return Err(format!("源文件不存在: {}", old_filepath));
     }
