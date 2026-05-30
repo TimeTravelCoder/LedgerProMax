@@ -218,7 +218,7 @@ npm run tauri build
 | `archive_to_zip` | 多文件压缩归档 |
 | `find_duplicates` | 查重（filename/size/hash） |
 | `open_in_system` | 系统默认程序打开文件 |
-| `select_directory` | Windows 原生目录选择对话框 |
+| *(目录选择器)* | 原生跨平台目录选择 (tauri-plugin-dialog) |
 
 ## 安全设计
 

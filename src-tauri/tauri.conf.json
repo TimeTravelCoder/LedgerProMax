@@ -12,11 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "👑 Ledger Pro Max",
+        "title": "Ledger Pro Max",
         "width": 1024,
         "height": 768,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "center": true
       }
     ],
     "security": {
@@ -49,6 +50,16 @@
         "languages": ["SimpChinese", "English"],
         "installerIcon": "icons/icon.ico"
       }
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "dmg": {
+        "windowPosition": { "x": 400, "y": 200 },
+        "windowSize": { "width": 600, "height": 400 },
+        "applicationFolderPosition": { "x": 150, "y": 200 },
+        "appPosition": { "x": 450, "y": 200 }
+      },
+      "signingIdentity": null
     },
     "android": {
       "debugApplicationIdSuffix": ".debug"

@@ -59,8 +59,10 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
   const isPresentation = [".ppt", ".pptx"].includes(fileExt);
   const isBinary = [".zip", ".rar", ".7z", ".exe", ".dll", ".dmg", ".pkg", ".tar", ".gz"].includes(fileExt);
 
-  // Absolute path of the file for local preview
-  const absolutePath = `${workspaceDir}/${filepath}`.replace(/\//g, "\\");
+  // Absolute path of the file for local preview.
+  // Tauri's convertFileSrc() normalises separators internally — no need to force
+  // backslashes (which would break file:// URLs on macOS).
+  const absolutePath = `${workspaceDir}/${filepath}`;
 
   useEffect(() => {
     if (isImage || isPdf || isBinary) return;

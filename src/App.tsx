@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
+import { IS_MACOS, IS_WINDOWS, MOD_KEY_SYMBOL } from "./utils/platform";
 import LiquidGlass from "./components/liquid-glass/LiquidGlass";
 import PreviewPanel from "./components/PreviewPanel";
 import DuplicateFinder from "./components/DuplicateFinder";
@@ -128,7 +130,9 @@ const getFileIcon = (filename: string, size = 32) => {
         color: "#ffffff",
         fontSize: fontSize,
         fontWeight: "bold",
-        fontFamily: "var(--font-display), 'Segoe UI', sans-serif",
+        fontFamily: IS_MACOS
+        ? "var(--font-display), -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif"
+        : "var(--font-display), 'Segoe UI', sans-serif",
         flexShrink: 0,
         boxShadow: `0 3px 8px ${color}33`,
         userSelect: "none"
@@ -215,14 +219,16 @@ export default function App() {
   };
 
   // Global Workspace Configuration
-  const [workspaceDir, setWorkspaceDir] = useState<string>("C:\\Users\\Ming\\Desktop\\Ledger Pro Max\\Workspace");
+  // Initialise empty — load_config (called during initApp) populates platform-correct
+  // defaults from the Rust backend, which uses the `dirs` crate for native paths.
+  const [workspaceDir, setWorkspaceDir] = useState<string>("");
   const workspaceDirRef = useRef(workspaceDir);
   useEffect(() => { workspaceDirRef.current = workspaceDir; }, [workspaceDir]);
   const [workspaceLang, setWorkspaceLang] = useState<string>("zh-full");
   const inboxName = workspaceLang.startsWith("en") ? "00Inbox" : "00收集箱";
-  const [monitoredDirs, setMonitoredDirs] = useState<string>("C:\\Users\\Ming\\Downloads");
-  const [backupDiskDir, setBackupDiskDir] = useState<string>("D:\\LedgerBackup\\Disk");
-  const [backupCloudDir, setBackupCloudDir] = useState<string>("D:\\LedgerBackup\\Cloud");
+  const [monitoredDirs, setMonitoredDirs] = useState<string>("");
+  const [backupDiskDir, setBackupDiskDir] = useState<string>("");
+  const [backupCloudDir, setBackupCloudDir] = useState<string>("");
 
   // State: Notification
   const [notification, setNotification] = useState<{ show: boolean; name: string; size: number; filepath: string } | null>(null);
@@ -413,7 +419,14 @@ export default function App() {
     const raw = (value || "").trim();
     if (!raw) return "名称不能为空。";
     const parts = raw.replace(/\\/g, "/").split("/");
-    const illegalNameChars = /[<>:"|?*]/;
+
+    // Platform-specific illegal filename characters
+    const illegalNameChars = IS_MACOS
+      ? /[/]/   // macOS APFS: only '/' (path separator) and NULL byte are forbidden
+      : /[<>:"|?*]/;  // Windows: standard NTFS forbidden set
+    const illegalMsg = IS_MACOS
+      ? "包含非法字符：/（正斜杠不能在文件/文件夹名称中使用）。"
+      : "包含 Windows 非法字符：< > : \" | ? *。";
 
     if (!options.allowSlash && raw.includes("/")) {
       return "名称不能包含 / 或 \\，请把父路径填入上方父级路径。";
@@ -423,7 +436,7 @@ export default function App() {
       const trimmed = part.trim();
       if (!trimmed) return "路径不能包含空层级。";
       if (trimmed === "." || trimmed === ".." || trimmed.includes("..")) return "路径不能包含 . 或 ..。";
-      if (illegalNameChars.test(trimmed)) return "包含 Windows 非法字符：< > : \" | ? *。";
+      if (illegalNameChars.test(trimmed)) return illegalMsg;
     }
 
     return "";
@@ -1287,8 +1300,12 @@ export default function App() {
 
   const handleSelectDir = async (setter: (val: string) => void) => {
     try {
-      const selected: string = await invoke("select_directory");
-      if (selected && selected !== "USER_CANCELLED") {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "请选择目标目录"
+      });
+      if (selected && typeof selected === "string") {
         setter(selected);
       }
     } catch (err) {
@@ -3575,7 +3592,8 @@ export default function App() {
                             }} 
                             onClick={() => {
                               const path = `${workspaceDir}/${selectedWorkspaceFile.filepath}`;
-                              navigator.clipboard.writeText(path.replace(/\//g, "\\"));
+                              // Use forward slashes — works on all platforms
+                              navigator.clipboard.writeText(path.replace(/\\/g, "/"));
                               addLog("文件完整路径已成功复制到剪贴板。");
                               showToast("已复制绝对路径！", "success");
                             }}
@@ -3827,8 +3845,12 @@ export default function App() {
                               type="button"
                               onClick={async () => {
                                 try {
-                                  const selected: string = await invoke("select_directory");
-                                  if (selected && selected !== "USER_CANCELLED") {
+                                  const selected = await open({
+                                    directory: true,
+                                    multiple: false,
+                                    title: "请选择监听目录"
+                                  });
+                                  if (selected && typeof selected === "string") {
                                     if (pathsList.includes(selected)) {
                                       showToast("该目录已在监听列表中！", "warning");
                                     } else {
@@ -4192,8 +4214,8 @@ export default function App() {
                   }} style={{fontSize: "11px", padding: "6px 12px"}}>📥 导入</button>
                   <button className="btn danger" onClick={() => {
                     if (!window.confirm("确定要重置所有配置为默认值吗？此操作不可撤销。")) return;
-                    setWorkspaceDir("C:\\Users\\Ming\\Desktop\\Ledger Pro Max\\Workspace");
-                    setMonitoredDirs("C:\\Users\\Ming\\Downloads");
+                    setWorkspaceDir("");
+                    setMonitoredDirs("");
                     setBackupDiskDir(""); setBackupCloudDir("");
                     setTagsState({primary: [], secondary: [], status: ["#待处理", "#进行中", "#已完成", "#非常重要"]});
                     setAutoRulesState([]); setNamingTemplates(prev => prev.filter(t => !t.key.startsWith("custom_")));
@@ -4213,134 +4235,273 @@ export default function App() {
           {activeTab === "about" && (
             <div style={{overflowY: "auto", flex: 1, paddingRight: "6px", paddingBottom: "40px", maxWidth: "780px", margin: "0 auto", width: "100%"}}>
 
-              {/* Hero — centered, bold */}
-              <div style={{textAlign: "center", padding: "48px 20px 28px"}}>
-                <div style={{
-                  background: "linear-gradient(135deg, #6366f1 0%, #a855f7 40%, #22d3ee 100%)",
-                  width: "80px", height: "80px", borderRadius: "20px",
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "28px", fontWeight: 900, color: "#fff",
-                  boxShadow: "0 16px 40px rgba(99, 102, 241, 0.35), 0 0 80px rgba(99, 102, 241, 0.12)",
-                  marginBottom: "24px"
-                }}>PM</div>
-                <h1 style={{fontFamily: "var(--font-display)", fontSize: "32px", fontWeight: 800, marginBottom: "6px", letterSpacing: "-0.5px"}}>Ledger Pro Max</h1>
-                <p style={{color: "var(--text-secondary)", fontSize: "15px", marginBottom: "12px", lineHeight: 1.6}}>
-                  本地桌面文档资产管理控制台<br/>收集 · 整理 · 标签 · 查重 · 备份 — 一条龙工作流
-                </p>
-                <div style={{display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap"}}>
-                  <span style={{padding: "5px 14px", borderRadius: "99px", background: "var(--color-primary)", color: "#fff", fontSize: "12px", fontWeight: 700}}>v1.0.0</span>
-                  <span style={{padding: "5px 14px", borderRadius: "99px", border: "1px solid var(--border-light)", fontSize: "12px", color: "var(--text-secondary)"}}>Windows 旗舰发布版</span>
+              {IS_MACOS ? (
+              /* ── macOS Native About Panel ─────────────────────────────── */
+              <>
+                {/* App Icon + Identity — macOS style centered hero */}
+                <div style={{textAlign: "center", padding: "56px 20px 36px"}}>
+                  <div style={{
+                    width: "96px", height: "96px", borderRadius: "22px",
+                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "36px", fontWeight: 900, color: "#fff",
+                    boxShadow: "0 8px 32px rgba(102, 126, 234, 0.25)",
+                    marginBottom: "28px"
+                  }}>PM</div>
+                  <h1 style={{fontFamily: "-apple-system, 'SF Pro Display', sans-serif", fontSize: "28px", fontWeight: 700, marginBottom: "4px", letterSpacing: "-0.3px", color: "var(--text-primary)"}}>Ledger Pro Max</h1>
+                  <p style={{fontFamily: "-apple-system, 'SF Pro Text', sans-serif", color: "var(--text-muted)", fontSize: "13px", fontWeight: 400, marginBottom: "16px", lineHeight: 1.5}}>
+                    macOS 原生文档资产管理 · 收集 · 整理 · 备份 — 一条龙工作流
+                  </p>
+                  <div style={{display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap"}}>
+                    <span style={{padding: "4px 12px", borderRadius: "99px", background: "var(--color-primary)", color: "#fff", fontSize: "12px", fontWeight: 600, fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>v1.0.0</span>
+                    <span style={{padding: "4px 12px", borderRadius: "99px", border: "1px solid var(--border-light)", fontSize: "12px", color: "var(--text-secondary)", fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>macOS 原生旗舰版 · Max_Mac</span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Branch lineage — inspired by Ledger Max README */}
-              <div className="cyber-card" style={{marginBottom: "20px"}}>
-                <h3 className="card-title" style={{fontSize: "16px"}}>🧭 分支演进</h3>
-                <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "10px"}}>
-                  {[
-                    ["📁", "master", "基础开源版", "var(--text-secondary)"],
-                    ["🧩", "Plus", "工作区增强版", "#f59e0b"],
-                    ["🛡️", "pro", "安全事务版", "#10b981"],
-                    ["👑", "Max", "Windows 旗舰版", "#6366f1"],
-                    ["🍎", "Max_Mac", "macOS DMG", "#ec4899"],
-                  ].map(([icon, branch, desc, color]) => (
-                    <div key={branch} style={{padding: "12px", borderRadius: "10px", border: "1px solid var(--border-light)", background: "rgba(255,255,255,0.015)", textAlign: "center"}}>
-                      <div style={{fontSize: "20px", marginBottom: "4px"}}>{icon}</div>
-                      <div style={{fontSize: "13px", fontWeight: 700, color}}>{branch}</div>
-                      <div style={{fontSize: "10px", color: "var(--text-muted)", marginTop: "2px"}}>{desc}</div>
-                    </div>
-                  ))}
+                {/* Product Story Card */}
+                <div className="cyber-card" style={{marginBottom: "24px"}}>
+                  <h3 className="card-title" style={{fontSize: "15px", fontFamily: "-apple-system, 'SF Pro Display', sans-serif"}}>关于 Pro Max</h3>
+                  <p style={{color: "var(--text-secondary)", fontSize: "13px", lineHeight: 1.8, margin: 0, fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>
+                    <strong style={{color: "#ec4899"}}>Ledger Pro Max (Max_Mac)</strong> 是专为 macOS 平台从零深度适配的旗舰版本。基于 <strong>Tauri v2 + Rust</strong> 构建，原生支持 <strong>Apple Silicon (M1–M4)</strong> 与 Intel 芯片双架构，充分利用 <strong>APFS</strong> 文件系统特性与 <strong>FSEvents</strong> 内核级文件监控。
+                  </p>
+                  <p style={{color: "var(--text-secondary)", fontSize: "13px", lineHeight: 1.8, margin: "12px 0 0 0", fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>
+                    遵循 macOS 设计规范与交互惯例，适配 <strong>深色模式</strong>、<strong>流量灯按钮</strong>、<strong>原生快捷键 (⌘)</strong> 与 <strong>Gatekeeper 安全模型</strong>。以 <strong>DMG 镜像</strong> 分发，支持代码签名与公证，无需任何模拟层或兼容环境。
+                  </p>
                 </div>
-                <div style={{marginTop: "14px", padding: "12px", borderRadius: "8px", background: theme === "light" ? "rgba(99,102,241,0.05)" : "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.18)", fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.6, textAlign: "center"}}>
-                  👑 <strong style={{color: "var(--color-primary)"}}>Pro Max</strong> 继承 Max 全部旗舰特性，以 <strong style={{color: "var(--color-primary)"}}>Tauri v2 + React + Rust</strong> 重写，带来原生性能与跨平台能力。
-                </div>
-              </div>
 
-              {/* Feature highlights — badge grid */}
-              <div style={{marginBottom: "20px"}}>
-                <h3 className="card-title" style={{fontSize: "16px", marginBottom: "12px"}}>✨ 旗舰能力</h3>
-                <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "10px"}}>
-                  {[
-                    ["📥", "智能收集箱", "拖拽投递、命名模板、标签与备注"],
-                    ["📡", "多目录监听", "新文件落地即时提醒整理"],
-                    ["🏷️", "AI 标签推荐", "语义分析自动匹配标签"],
-                    ["🗂️", "分类工作空间", "12 个标准目录 + 拼音搜索"],
-                    ["👁️", "文件预览", "文本/Markdown/图片/PDF/Word"],
-                    ["🔒", "安全归档", "ZIP 打包 + SHA-256 校验"],
-                    ["💾", "3-2-1 备份", "本地/外置/云端三层保护"],
-                    ["🔍", "智能查重", "文件名/大小/哈希三模式"],
-                    ["🎨", "双主题", "赛博暗黑 + 极简明亮"],
-                    ["⌨️", "键盘快捷键", "Ctrl+1~5 快速切换板块"],
-                  ].map(([icon, title, desc]) => (
-                    <div key={title} style={{padding: "14px", borderRadius: "10px", border: "1px solid var(--border-light)", background: "rgba(255,255,255,0.015)", display: "flex", gap: "12px", alignItems: "flex-start"}}>
-                      <span style={{fontSize: "20px", flexShrink: 0}}>{icon}</span>
-                      <div>
-                        <div style={{fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "2px"}}>{title}</div>
-                        <div style={{fontSize: "11px", color: "var(--text-muted)", lineHeight: 1.4}}>{desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tech Stack + System Info — side by side */}
-              <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px"}}>
-                <div className="cyber-card">
-                  <h3 className="card-title" style={{fontSize: "16px"}}>⚙️ 技术栈</h3>
-                  <div style={{display: "flex", flexDirection: "column", gap: "8px"}}>
+                {/* macOS-Optimized Features — 2-column grid with SF styling */}
+                <div style={{marginBottom: "24px"}}>
+                  <h3 className="card-title" style={{fontSize: "15px", marginBottom: "14px", fontFamily: "-apple-system, 'SF Pro Display', sans-serif"}}>macOS 原生能力</h3>
+                  <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: "10px"}}>
                     {[
-                      ["桌面框架", "Tauri v2 (Rust)"],
-                      ["前端", "React 19 + TypeScript"],
-                      ["构建工具", "Vite 8"],
-                      ["数据库", "SQLite (rusqlite)"],
-                      ["文件监控", "notify (Rust)"],
-                      ["图标", "Lucide React"],
-                    ].map(([k, v]) => (
-                      <div key={k} style={{display: "flex", justifyContent: "space-between", fontSize: "13px"}}>
-                        <span style={{color: "var(--text-muted)"}}>{k}</span>
-                        <span style={{color: "var(--text-primary)", fontWeight: 500}}>{v}</span>
+                      ["🍎", "Universal Binary", "Apple Silicon M1–M4 与 Intel 原生双架构支持，无 Rosetta 损耗"],
+                      ["📡", "FSEvents 文件监控", "内核级实时事件流，低功耗、低延迟，无需轮询"],
+                      ["🗂️", "APFS 深度适配", "快照、克隆、空间共享 — 充分利用 Apple 文件系统特性"],
+                      ["🔐", "Gatekeeper 兼容", "代码签名 + Apple 公证，开箱即用，无安全警告"],
+                      ["🎛️", "原生 UI 惯例", "SF Pro 字体、流量灯按钮、⌘ 快捷键、弹性滚动"],
+                      ["📦", "DMG 原生分发", "拖拽安装至 /Applications，与 macOS 生态无缝集成"],
+                      ["🏷️", "AI 语义标签", "中文 NLP 引擎驱动的智能标签推荐，本地运行零联网"],
+                      ["👁️", "Quick Look 风格预览", "图片 / PDF / Markdown / 纯文本 / Word 文档实时预览"],
+                      ["💾", "3-2-1 备份策略", "本地 + 外置卷 + 云盘三层保护，SHA-256 完整性校验"],
+                      ["🔍", "三模式智能查重", "文件名 / 大小 / SHA-256 哈希，精准定位重复资产"],
+                    ].map(([icon, title, desc]) => (
+                      <div key={title} style={{padding: "14px", borderRadius: "10px", border: "1px solid var(--border-light)", background: "rgba(255,255,255,0.015)", display: "flex", gap: "12px", alignItems: "flex-start"}}>
+                        <span style={{fontSize: "20px", flexShrink: 0}}>{icon}</span>
+                        <div>
+                          <div style={{fontSize: "13px", fontWeight: 600, fontFamily: "-apple-system, 'SF Pro Text', sans-serif", color: "var(--text-primary)", marginBottom: "3px"}}>{title}</div>
+                          <div style={{fontSize: "11px", color: "var(--text-muted)", lineHeight: 1.45, fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>{desc}</div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="cyber-card">
-                  <h3 className="card-title" style={{fontSize: "16px"}}>🖥️ 系统诊断</h3>
-                  <div style={{display: "flex", flexDirection: "column", gap: "8px"}}>
+
+                {/* Architecture + Environment — side by side */}
+                <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "24px"}}>
+                  <div className="cyber-card">
+                    <h3 className="card-title" style={{fontSize: "15px", fontFamily: "-apple-system, 'SF Pro Display', sans-serif"}}>架构</h3>
+                    <div style={{display: "flex", flexDirection: "column", gap: "8px", fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>
+                      {[
+                        ["运行环境", "macOS 12 Monterey+"],
+                        ["芯片架构", "Universal (arm64 + x86_64)"],
+                        ["桌面引擎", "Tauri v2 + WebKit Wry"],
+                        ["后端运行时", "Rust (aarch64 / x86_64)"],
+                        ["文件监控", "FSEvents (内核级)"],
+                        ["数据库", "SQLite (rusqlite, bundled)"],
+                      ].map(([k, v]) => (
+                        <div key={k} style={{display: "flex", justifyContent: "space-between", fontSize: "13px"}}>
+                          <span style={{color: "var(--text-muted)"}}>{k}</span>
+                          <span style={{color: "var(--text-primary)", fontWeight: 500}}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="cyber-card">
+                    <h3 className="card-title" style={{fontSize: "15px", fontFamily: "-apple-system, 'SF Pro Display', sans-serif"}}>系统信息</h3>
+                    <div style={{display: "flex", flexDirection: "column", gap: "8px", fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>
+                      {[
+                        ["工作区", workspaceDir || "（未配置）"],
+                        ["文件系统", "APFS"],
+                        ["桌面路径", "~/Desktop"],
+                        ["配置目录", "~/Library/Application Support/Ledger"],
+                        ["版本", "1.0.0 (Max_Mac)"],
+                        ["构建日期", "2026-05-29"],
+                        ["分发格式", "DMG (已签名 & 公证)"],
+                      ].map(([k, v]) => (
+                        <div key={k} style={{display: "flex", justifyContent: "space-between", fontSize: "13px"}}>
+                          <span style={{color: "var(--text-muted)", flexShrink: 0}}>{k}</span>
+                          <span style={{color: "var(--text-primary)", fontWeight: 500, textAlign: "right", wordBreak: "break-all", maxWidth: "58%"}}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Credits — compact macOS style */}
+                <div className="cyber-card" style={{marginBottom: "24px"}}>
+                  <h3 className="card-title" style={{fontSize: "15px", fontFamily: "-apple-system, 'SF Pro Display', sans-serif"}}>致谢</h3>
+                  <div style={{display: "flex", flexWrap: "wrap", gap: "6px"}}>
+                    {["Tauri", "React 19", "Vite", "Rust", "rusqlite", "notify (FSEvents)", "zip-rs", "chrono", "sha2", "encoding-rs", "serde", "Lucide", "TypeScript"].map(d => (
+                      <span key={d} style={{padding: "3px 10px", borderRadius: "6px", background: "rgba(255,255,255,0.025)", border: "1px solid var(--border-light)", fontSize: "11px", color: "var(--text-secondary)", fontFamily: "monospace"}}>{d}</span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div style={{textAlign: "center", padding: "8px 0 48px", fontSize: "12px", color: "var(--text-muted)", fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>
+                  <a href="https://github.com/TimeTravelCoder/LedgerProMax" target="_blank" style={{color: "var(--color-primary)", textDecoration: "none", fontWeight: 600}}>github.com/TimeTravelCoder/LedgerProMax</a>
+                  <span style={{margin: "0 10px"}}>·</span>
+                  <span>🍎 macOS 原生 · DMG 分发 · Gatekeeper 兼容</span>
+                  <div style={{marginTop: "6px", fontSize: "11px", color: "var(--text-muted)"}}>Made with ❤️ for the Mac community</div>
+                </div>
+              </>
+              ) : (
+              /* ── Windows / Linux About Panel (unchanged structure) ────── */
+              <>
+                {/* Hero — centered, bold */}
+                <div style={{textAlign: "center", padding: "48px 20px 28px"}}>
+                  <div style={{
+                    background: "linear-gradient(135deg, #6366f1 0%, #a855f7 40%, #22d3ee 100%)",
+                    width: "80px", height: "80px", borderRadius: "20px",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "28px", fontWeight: 900, color: "#fff",
+                    boxShadow: "0 16px 40px rgba(99, 102, 241, 0.35), 0 0 80px rgba(99, 102, 241, 0.12)",
+                    marginBottom: "24px"
+                  }}>PM</div>
+                  <h1 style={{fontFamily: "var(--font-display)", fontSize: "32px", fontWeight: 800, marginBottom: "6px", letterSpacing: "-0.5px"}}>Ledger Pro Max</h1>
+                  <p style={{color: "var(--text-secondary)", fontSize: "15px", marginBottom: "12px", lineHeight: 1.6}}>
+                    本地桌面文档资产管理控制台<br/>收集 · 整理 · 标签 · 查重 · 备份 — 一条龙工作流
+                  </p>
+                  <div style={{display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap"}}>
+                    <span style={{padding: "5px 14px", borderRadius: "99px", background: "var(--color-primary)", color: "#fff", fontSize: "12px", fontWeight: 700}}>v1.0.0</span>
+                    <span style={{padding: "5px 14px", borderRadius: "99px", border: "1px solid var(--border-light)", fontSize: "12px", color: "var(--text-secondary)"}}>{IS_WINDOWS ? "Windows 旗舰发布版" : "Linux 旗舰发布版"}</span>
+                  </div>
+                </div>
+
+                {/* Branch lineage */}
+                <div className="cyber-card" style={{marginBottom: "20px"}}>
+                  <h3 className="card-title" style={{fontSize: "16px"}}>🧭 分支演进</h3>
+                  <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "10px"}}>
                     {[
-                      ["工作区", workspaceDir],
-                      ["平台", "Windows 10/11 x64"],
-                      ["许可证", "MIT"],
-                      ["构建日期", "2026-05-29"],
-                      ["数据库", "SQLite (bundled)"],
-                      ["版本", "v1.0.0"],
-                    ].map(([k, v]) => (
-                      <div key={k} style={{display: "flex", justifyContent: "space-between", fontSize: "13px"}}>
-                        <span style={{color: "var(--text-muted)"}}>{k}</span>
-                        <span style={{color: "var(--text-primary)", fontWeight: 500, wordBreak: "break-all", maxWidth: "60%", textAlign: "right"}}>{v}</span>
+                      ["📁", "master", "基础开源版", "var(--text-secondary)"],
+                      ["🧩", "Plus", "工作区增强版", "#f59e0b"],
+                      ["🛡️", "pro", "安全事务版", "#10b981"],
+                      ["👑", "Max", "Windows 旗舰版", "#6366f1"],
+                      ["🍎", "Max_Mac", "macOS 适配版", "#ec4899"],
+                    ].map(([icon, branch, desc, color]) => {
+                      const isCurrent = (IS_WINDOWS && branch === "Max") || (!IS_WINDOWS && branch === "master");
+                      return (
+                      <div key={branch} style={{
+                        padding: "12px", borderRadius: "10px",
+                        border: isCurrent ? `2px solid ${color}` : "1px solid var(--border-light)",
+                        background: isCurrent ? (theme === "light" ? `${color}0F` : `${color}15`) : "rgba(255,255,255,0.015)",
+                        textAlign: "center", position: "relative",
+                        transition: "border-color 0.2s, background 0.2s"
+                      }}>
+                        <div style={{fontSize: "20px", marginBottom: "4px"}}>{icon}</div>
+                        <div style={{fontSize: "13px", fontWeight: 700, color}}>{branch}</div>
+                        <div style={{fontSize: "10px", color: "var(--text-muted)", marginTop: "2px"}}>{desc}</div>
+                        {isCurrent && (
+                          <div style={{position: "absolute", top: "-8px", right: "-8px", background: color, color: "#fff", fontSize: "9px", fontWeight: 700, padding: "2px 6px", borderRadius: "99px", lineHeight: 1.2}}>当前</div>
+                        )}
+                      </div>
+                    )})}
+                  </div>
+                  <div style={{marginTop: "14px", padding: "12px", borderRadius: "8px", background: theme === "light" ? "rgba(99,102,241,0.05)" : "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.18)", fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.6, textAlign: "center"}}>
+                    {IS_WINDOWS ? (
+                      <>👑 <strong style={{color: "var(--color-primary)"}}>Pro Max</strong> 继承 Max 全部旗舰特性，以 <strong style={{color: "var(--color-primary)"}}>Tauri v2 + React + Rust</strong> 重写，带来原生性能与跨平台能力。</>
+                    ) : (
+                      <>🐧 <strong style={{color: "var(--color-primary)"}}>Pro Max</strong> 跨平台桌面文档管理控制台 — Tauri v2 + React + Rust 构建。</>
+                    )}
+                  </div>
+                </div>
+
+                {/* Feature highlights */}
+                <div style={{marginBottom: "20px"}}>
+                  <h3 className="card-title" style={{fontSize: "16px", marginBottom: "12px"}}>✨ 旗舰能力</h3>
+                  <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "10px"}}>
+                    {[
+                      ["📥", "智能收集箱", "拖拽投递、命名模板、标签与备注"],
+                      ["📡", "多目录监听", "新文件落地即时提醒整理"],
+                      ["🏷️", "AI 标签推荐", "语义分析自动匹配标签"],
+                      ["🗂️", "分类工作空间", "12 个标准目录 + 拼音搜索"],
+                      ["👁️", "文件预览", "文本/Markdown/图片/PDF/Word"],
+                      ["🔒", "安全归档", "ZIP 打包 + SHA-256 校验"],
+                      ["💾", "3-2-1 备份", "本地/外置/云端三层保护"],
+                      ["🔍", "智能查重", "文件名/大小/哈希三模式"],
+                      ["🎨", "双主题", "赛博暗黑 + 极简明亮"],
+                      ["⌨️", "键盘快捷键", `${MOD_KEY_SYMBOL}1~5 快速切换板块`],
+                    ].map(([icon, title, desc]) => (
+                      <div key={title} style={{padding: "14px", borderRadius: "10px", border: "1px solid var(--border-light)", background: "rgba(255,255,255,0.015)", display: "flex", gap: "12px", alignItems: "flex-start"}}>
+                        <span style={{fontSize: "20px", flexShrink: 0}}>{icon}</span>
+                        <div>
+                          <div style={{fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "2px"}}>{title}</div>
+                          <div style={{fontSize: "11px", color: "var(--text-muted)", lineHeight: 1.4}}>{desc}</div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
-              </div>
 
-              {/* Open source credits */}
-              <div className="cyber-card" style={{marginBottom: "20px"}}>
-                <h3 className="card-title" style={{fontSize: "16px"}}>🙏 开源致谢</h3>
-                <div style={{display: "flex", flexWrap: "wrap", gap: "6px"}}>
-                  {["tauri", "react", "vite", "rusqlite", "notify", "zip-rs", "walkdir", "chrono", "sha2", "regex", "encoding-rs", "serde", "lucide-react", "typescript"].map(d => (
-                    <span key={d} style={{padding: "4px 10px", borderRadius: "6px", background: "rgba(255,255,255,0.025)", border: "1px solid var(--border-light)", fontSize: "11px", color: "var(--text-secondary)", fontFamily: "monospace"}}>{d}</span>
-                  ))}
+                {/* Tech Stack + System Info */}
+                <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px"}}>
+                  <div className="cyber-card">
+                    <h3 className="card-title" style={{fontSize: "16px"}}>⚙️ 技术栈</h3>
+                    <div style={{display: "flex", flexDirection: "column", gap: "8px"}}>
+                      {[
+                        ["桌面框架", "Tauri v2 (Rust)"],
+                        ["前端", "React 19 + TypeScript"],
+                        ["构建工具", "Vite 8"],
+                        ["数据库", "SQLite (rusqlite)"],
+                        ["文件监控", "notify (Rust)"],
+                        ["图标", "Lucide React"],
+                      ].map(([k, v]) => (
+                        <div key={k} style={{display: "flex", justifyContent: "space-between", fontSize: "13px"}}>
+                          <span style={{color: "var(--text-muted)"}}>{k}</span>
+                          <span style={{color: "var(--text-primary)", fontWeight: 500}}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="cyber-card">
+                    <h3 className="card-title" style={{fontSize: "16px"}}>🖥️ 系统诊断</h3>
+                    <div style={{display: "flex", flexDirection: "column", gap: "8px"}}>
+                      {[
+                        ["工作区", workspaceDir],
+                        ["平台", IS_WINDOWS ? "Windows 10/11 x64" : "Linux x64"],
+                        ["文件系统", IS_WINDOWS ? "NTFS" : "ext4/Btrfs"],
+                        ["许可证", "MIT"],
+                        ["构建日期", "2026-05-29"],
+                        ["数据库", "SQLite (bundled)"],
+                        ["版本", "v1.0.0"],
+                      ].map(([k, v]) => (
+                        <div key={k} style={{display: "flex", justifyContent: "space-between", fontSize: "13px"}}>
+                          <span style={{color: "var(--text-muted)"}}>{k}</span>
+                          <span style={{color: "var(--text-primary)", fontWeight: 500, wordBreak: "break-all", maxWidth: "60%", textAlign: "right"}}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Footer */}
-              <div style={{textAlign: "center", padding: "8px 0 40px", fontSize: "13px", color: "var(--text-muted)"}}>
-                <a href="https://github.com/TimeTravelCoder/LedgerProMax" target="_blank" style={{color: "var(--color-primary)", textDecoration: "none", fontWeight: 600}}>github.com/TimeTravelCoder/LedgerProMax</a>
-                <span style={{margin: "0 12px"}}>·</span>
-                <span>Built for knowledge workers</span>
-              </div>
-            </div>
-          )}
+                {/* Credits */}
+                <div className="cyber-card" style={{marginBottom: "20px"}}>
+                  <h3 className="card-title" style={{fontSize: "16px"}}>🙏 开源致谢</h3>
+                  <div style={{display: "flex", flexWrap: "wrap", gap: "6px"}}>
+                    {["tauri", "react", "vite", "rusqlite", "notify", "zip-rs", "walkdir", "chrono", "sha2", "regex", "encoding-rs", "serde", "lucide-react", "typescript"].map(d => (
+                      <span key={d} style={{padding: "4px 10px", borderRadius: "6px", background: "rgba(255,255,255,0.025)", border: "1px solid var(--border-light)", fontSize: "11px", color: "var(--text-secondary)", fontFamily: "monospace"}}>{d}</span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div style={{textAlign: "center", padding: "8px 0 40px", fontSize: "13px", color: "var(--text-muted)"}}>
+                  <a href="https://github.com/TimeTravelCoder/LedgerProMax" target="_blank" style={{color: "var(--color-primary)", textDecoration: "none", fontWeight: 600}}>github.com/TimeTravelCoder/LedgerProMax</a>
+                  <span style={{margin: "0 12px"}}>·</span>
+                  <span>{IS_WINDOWS ? "🪟 Windows 原生体验 · MSI/NSIS 分发" : "🐧 Linux 原生体验"}</span>
+                </div>
+              </>
+              )}
 
           {/* 5. DUPLICATES TAB */}
           {activeTab === "duplicates" && (

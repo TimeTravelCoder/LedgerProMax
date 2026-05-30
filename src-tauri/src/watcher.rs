@@ -48,6 +48,14 @@ impl WatcherManager {
         let app_handle_clone = app_handle.clone();
         
         // 2. Setup a new event handler
+        // On macOS, FSEvents has ~1-3s inherent latency — this is normal.
+        // We use a reduced poll interval to minimise perceived delay.
+        #[cfg(target_os = "macos")]
+        let notify_config = notify::Config::default()
+            .with_poll_interval(std::time::Duration::from_secs(1));
+        #[cfg(not(target_os = "macos"))]
+        let notify_config = notify::Config::default();
+
         let mut watcher = RecommendedWatcher::new(
             move |res: notify::Result<notify::Event>| {
                 if let Ok(event) = res {
@@ -64,11 +72,13 @@ impl WatcherManager {
                                 // Ignore temporary office files, browsers downloads caches, or dotfiles
                                 let filename = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
                                 let lower_filename = filename.to_lowercase();
-                                if filename.starts_with('.') 
-                                    || filename.starts_with("~$") 
-                                    || lower_filename.ends_with(".tmp") 
-                                    || lower_filename.ends_with(".crdownload") 
-                                    || lower_filename.ends_with(".download") 
+                                if filename.starts_with('.')
+                                    || filename.starts_with("~$")
+                                    || lower_filename.ends_with(".tmp")
+                                    || lower_filename.ends_with(".crdownload")
+                                    || lower_filename.ends_with(".download")
+                                    || filename == ".DS_Store"
+                                    || filename.starts_with("._")
                                 {
                                     continue;
                                 }
@@ -92,7 +102,7 @@ impl WatcherManager {
                     }
                 }
             },
-            notify::Config::default(),
+            notify_config,
         )
         .map_err(|e| e.to_string())?;
 

@@ -279,13 +279,21 @@ impl FileManager {
             return Err("文件夹路径不能为空。".to_string());
         }
 
-        let illegal_chars = ['<', '>', ':', '"', '|', '?', '*'];
+        let illegal_chars: &[char] = {
+            #[cfg(target_os = "windows")]
+            { &['<', '>', ':', '"', '|', '?', '*'] }
+            #[cfg(not(target_os = "windows"))]
+            { &['/'] } // macOS APFS / Linux: only '/' is forbidden in filenames
+        };
         for part in &cleaned_rel_path {
             if *part == "." || *part == ".." || part.contains("..") {
                 return Err("文件夹路径不能包含 . 或 .. 路径穿越片段。".to_string());
             }
+            if part.contains('\0') {
+                return Err("文件夹名称包含非法空字符。".to_string());
+            }
             if part.chars().any(|ch| illegal_chars.contains(&ch)) {
-                return Err(format!("文件夹名称 '{}' 包含 Windows 非法字符。", part));
+                return Err(format!("文件夹名称 '{}' 包含非法字符。", part));
             }
         }
 
@@ -323,6 +331,16 @@ impl FileManager {
                         let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
                         
                         if ext != "lnk" && ext != "ini" && ext != "url" && !name.starts_with("~$") {
+                            // macOS-specific: filter .DS_Store, .localized, resource forks, Safari shortcuts
+                            #[cfg(target_os = "macos")]
+                            {
+                                if name == ".DS_Store" || name == ".localized"
+                                    || name.starts_with("._")
+                                    || ext == "webloc" || ext == "download"
+                                {
+                                    continue;
+                                }
+                            }
                             let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
                             let mtime = entry.metadata()
                                 .and_then(|m| m.modified())
@@ -367,7 +385,29 @@ impl FileManager {
                             } else if ext == "lnk" || ext == "ini" || ext == "url" {
                                 shortcuts += 1;
                             } else {
-                                normal_files += 1;
+                                // macOS: .webloc is the native URL shortcut format
+                                #[cfg(target_os = "macos")]
+                                if ext == "webloc" {
+                                    shortcuts += 1;
+                                } else {
+                                    // macOS: skip system files that are not user documents
+                                    #[cfg(target_os = "macos")]
+                                    if name == ".DS_Store" || name == ".localized"
+                                        || name.starts_with("._")
+                                    {
+                                        // skip — not a user document
+                                    } else {
+                                        normal_files += 1;
+                                    }
+                                    #[cfg(not(target_os = "macos"))]
+                                    {
+                                        normal_files += 1;
+                                    }
+                                }
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    normal_files += 1;
+                                }
                             }
                         }
                     }
