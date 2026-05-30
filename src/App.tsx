@@ -155,7 +155,7 @@ export default function App() {
   const [newFolderInput, setNewFolderInput] = useState("");
   const [createFolderRoot, setCreateFolderRoot] = useState("01课程学习");
   const [createFolderSubpath, setCreateFolderSubpath] = useState("");
-  const [version, setVersion] = useState("v1.0");
+  const [version, setVersion] = useState("v1.1");
   const [selectedWorkspaceFile, setSelectedWorkspaceFile] = useState<FileRecord | null>(null);
   const [ruleTestFilename, setRuleTestFilename] = useState<string>("report_final.pdf");
   const [tagSearchQuery, setTagSearchQuery] = useState<string>("");
@@ -4252,7 +4252,7 @@ export default function App() {
                     macOS 原生文档资产管理 · 收集 · 整理 · 备份 — 一条龙工作流
                   </p>
                   <div style={{display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap"}}>
-                    <span style={{padding: "4px 12px", borderRadius: "99px", background: "var(--color-primary)", color: "#fff", fontSize: "12px", fontWeight: 600, fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>v1.0.0</span>
+                    <span style={{padding: "4px 12px", borderRadius: "99px", background: "var(--color-primary)", color: "#fff", fontSize: "12px", fontWeight: 600, fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>v1.1.0</span>
                     <span style={{padding: "4px 12px", borderRadius: "99px", border: "1px solid var(--border-light)", fontSize: "12px", color: "var(--text-secondary)", fontFamily: "-apple-system, 'SF Pro Text', sans-serif"}}>macOS 原生旗舰版 · Max_Mac</span>
                   </div>
                 </div>
@@ -4323,7 +4323,7 @@ export default function App() {
                         ["文件系统", "APFS"],
                         ["桌面路径", "~/Desktop"],
                         ["配置目录", "~/Library/Application Support/Ledger"],
-                        ["版本", "1.0.0 (Max_Mac)"],
+                        ["版本", "1.1.0 (Max_Mac)"],
                         ["构建日期", "2026-05-29"],
                         ["分发格式", "DMG (已签名 & 公证)"],
                       ].map(([k, v]) => (
