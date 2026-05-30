@@ -1,19 +1,27 @@
-name: Build Windows Installers
+name: Cross-Platform Release Build
 
 on:
   push:
-    branches: [ProMax, Fix]
+    branches:
+      - ProMax
+      - Win_Fix
+      - MAC
+      - MAC_Fix
   workflow_dispatch:
 
 jobs:
-  build-windows:
-    name: Build Windows (MSI + EXE)
-    runs-on: windows-latest
+  build:
+    name: Build Installer (${{ matrix.platform }})
+    runs-on: ${{ matrix.platform }}
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, windows-latest]
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -25,26 +33,42 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Setup Rust
+      - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
 
-      - name: Build Tauri (MSI + NSIS EXE)
+      - name: Build Tauri application (macOS Universal)
+        if: matrix.platform == 'macos-latest'
+        run: npm run tauri build -- --target universal-apple-darwin
+
+      - name: Build Tauri application (Windows)
+        if: matrix.platform == 'windows-latest'
         run: npm run tauri build
 
-      - name: Read version
-        id: version
+      - name: Read version from config
+        id: get_version
         shell: bash
         run: |
           VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
           echo "version=v$VERSION" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "plain_version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Collect build artifacts
+      - name: Collect macOS artifacts
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          mkdir -p release
+          cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg release/ 2>/dev/null || true
+          ls -la release/
+
+      - name: Collect Windows artifacts
+        if: matrix.platform == 'windows-latest'
         shell: bash
         run: |
           mkdir -p release
@@ -53,30 +77,33 @@ jobs:
           find src-tauri/target/release -maxdepth 1 -name "*.exe" ! -name "*uninst*" -exec cp {} release/ \; 2>/dev/null || true
           ls -la release/
 
-      - name: Create Release and upload assets
+      - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: Ledger Pro Max ${{ steps.version.outputs.version }}
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Ledger Pro Max ${{ steps.get_version.outputs.version }}
           body: |
-            ## 👑 Ledger Pro Max ${{ steps.version.outputs.version }}
+            ## 🚀 Ledger Pro Max ${{ steps.get_version.outputs.version }} 发布说明
 
-            ### 📦 安装包
+            ### 📦 跨平台下载包
 
-            | 文件 | 类型 |
-            |------|------|
-            | `.msi` | WiX 安装程序（推荐） |
-            | `.exe` | NSIS 安装向导 |
-            | 便携版 `.exe` | 免安装直接运行 |
+            #### 🍏 macOS (M1/M2/M3/M4 & Intel 通用双架构)
+            - 下载 `.dmg` 文件，双击并将 `Ledger Pro Max` 拖入 `Applications` 应用程序文件夹中即可运行。
+            - 深度适配 macOS FSEvents 与 APFS 文件系统。
 
-            ### 🔧 安装说明
+            #### 🪟 Windows (Windows 10/11)
+            - **WiX 安装程序 (.msi)**：推荐的标准安装方式。
+            - **NSIS 安装向导 (.exe)**：常规单文件向导安装包。
+            - **便携版 (.exe)**：无须安装，解压即用。
 
-            1. 下载 `.msi` 或 `.exe` 安装包
-            2. 双击运行，按向导完成安装
-            3. 首次启动会自动创建工作空间
+            ---
 
-            > 提交: ${{ github.sha }} · 分支: ${{ github.ref_name }}
+            ### 🔧 安装与配置指南
+            1. 首次启动软件时，程序会自动引导在本地目录建立或选择并核对 `00收集箱` 规范的工作空间。
+            2. 可以随时在 Settings (设置) 中对标准 12 级工作空间进行中英文规格热加载。
+
+            > 构建信息: 提交 `${{ github.sha }}` · 分支 `${{ github.ref_name }}`
           draft: false
-          prerelease: ${{ github.ref_name != 'ProMax' }}
+          prerelease: false
           files: release/*
           make_latest: true
