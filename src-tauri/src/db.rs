@@ -255,6 +255,19 @@ impl DatabaseManager {
         let mut params_vec: Vec<String> = Vec::new();
         let mut conditions = Vec::new();
         
+        if let Some(ref q) = query {
+            let cleaned = q.trim().to_lowercase();
+            if !cleaned.is_empty() {
+                // SQL-level pre-filter on filename and filepath for text searches.
+                // The in-memory pinyin/relevance pass below refines results further,
+                // so this is a performance optimization, not the final filter.
+                conditions.push("(filename LIKE ? OR filepath LIKE ?)".to_string());
+                let like_pattern = format!("%{}%", cleaned);
+                params_vec.push(like_pattern.clone());
+                params_vec.push(like_pattern);
+            }
+        }
+        
         if let Some(ref tags) = selected_tags {
             for tag in tags {
                 let cleaned = tag.trim();

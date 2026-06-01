@@ -55,7 +55,7 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
     Object.values(duplicateGroups).forEach(group => {
       if (group.length <= 1) return;
       
-      // Sort group: oldest first (minimum modified_time)
+      // Sort group: newest first (highest modified_time) — keep the newest, delete older copies
       const sorted = [...group].sort((a, b) => b.modified_time - a.modified_time);
       // Keep the first (newest), mark the rest for deletion
       for (let i = 1; i < sorted.length; i++) {

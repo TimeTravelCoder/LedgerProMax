@@ -9,6 +9,31 @@ use walkdir::WalkDir;
 const BANNED_KEYWORDS: &[&str] = &["最终版", "最终版2", "最新最终版", "新建文档", "新建文本文档", "新建文件夹", "最终修改版", "最最新版"];
 
 pub struct FileManager;
+/// Normalize a path by resolving  and  components lexically,
+/// without touching the filesystem. This prevents path traversal attacks
+/// where  segments would escape the workspace boundary.
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut components = Vec::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                // pop the last normal/root component; stay at root if nothing to pop
+                if components.last().map_or(false, |c| {
+                    matches!(c, std::path::Component::Normal(_) | std::path::Component::RootDir)
+                }) {
+                    components.pop();
+                }
+            }
+            std::path::Component::CurDir => {
+                // skip
+            }
+            other => components.push(other),
+        }
+    }
+    components.into_iter().collect()
+}
+
+
 
 impl FileManager {
     pub fn move_replace<P: AsRef<Path>, Q: AsRef<Path>>(
@@ -77,17 +102,11 @@ impl FileManager {
         let canonical_resolved = match resolved.canonicalize() {
             Ok(canonical) => canonical,
             Err(_) => {
-                // If it doesn't exist yet, we check if the parent is relative to workspace root
-                let mut current = resolved.as_path();
-                while let Some(parent) = current.parent() {
-                    if let Ok(canonical_parent) = parent.canonicalize() {
-                        if canonical_parent == ws_root || canonical_parent.starts_with(&ws_root) {
-                            return Ok(resolved);
-                        } else {
-                            break;
-                        }
-                    }
-                    current = parent;
+                // Path doesn't exist yet. Normalize lexically to resolve .. / .
+                // then verify the normalized result stays within the workspace root.
+                let normalized = normalize_path(&resolved);
+                if normalized == ws_root || normalized.starts_with(&ws_root) {
+                    return Ok(resolved);
                 }
                 return Err(format!("安全边界拦截：路径 '{}' 尝试越界访问工作空间外部！", rel_path));
             }

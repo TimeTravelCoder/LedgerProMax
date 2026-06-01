@@ -74,6 +74,11 @@ fn delete_file(workspace_dir: String, filepath: String) -> Result<(), String> {
 fn rename_file(workspace_dir: String, old_filepath: String, new_filepath: String, new_filename: String) -> Result<(), String> {
     let db = DatabaseManager::new(&workspace_dir);
     
+    // 0. Validate: new_filename must not contain path separators (prevents directory traversal via rename)
+    if new_filename.contains('/') || new_filename.contains('\\') {
+        return Err("文件名不能包含路径分隔符（/ 或 \\）。".to_string());
+    }
+    
     // 1. Resolve absolute paths inside workspace sandbox
     let old_abs_path = FileManager::safe_workspace_path(&old_filepath, &workspace_dir)?;
     let new_abs_path = FileManager::safe_workspace_path(&new_filepath, &workspace_dir)?;
@@ -99,8 +104,14 @@ fn rename_file(workspace_dir: String, old_filepath: String, new_filepath: String
         return Err(format!("源文件不存在: {}", old_filepath));
     }
     
-    // 4. Keep database records in sync
-    db.rename_file_record(&old_filepath, &new_filepath, &new_filename).map_err(|e| e.to_string())
+    // 4. Keep database records in sync; rollback physical rename on DB failure
+    if let Err(e) = db.rename_file_record(&old_filepath, &new_filepath, &new_filename) {
+        // Attempt to roll back the physical rename
+        let _ = fs::rename(&new_abs_path, &old_abs_path);
+        return Err(format!("数据库更新失败，已回滚文件重命名: {}", e));
+    }
+    
+    Ok(())
 }
 
 #[tauri::command]
@@ -299,11 +310,28 @@ fn read_file_content(workspace_dir: String, filepath: String) -> Result<String, 
     let mut handle = file.take(102400); // 限制最大读取 100KB
     handle.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
 
-    // 优先尝试 UTF-8 解码
-    if let Ok(utf8_str) = String::from_utf8(buffer.clone()) {
+    // Detect BOM and decode accordingly
+    // UTF-16 LE BOM
+    if buffer.len() >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE {
+        let (decoded, _, _) = encoding_rs::UTF_16LE.decode(&buffer);
+        return Ok(decoded.into_owned());
+    }
+    // UTF-16 BE BOM
+    if buffer.len() >= 2 && buffer[0] == 0xFE && buffer[1] == 0xFF {
+        let (decoded, _, _) = encoding_rs::UTF_16BE.decode(&buffer);
+        return Ok(decoded.into_owned());
+    }
+    // Strip UTF-8 BOM if present
+    let start = if buffer.len() >= 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF {
+        3
+    } else {
+        0
+    };
+    // Try UTF-8
+    if let Ok(utf8_str) = String::from_utf8(buffer[start..].to_vec()) {
         Ok(utf8_str)
     } else {
-        // 如果失败，回退到 Windows 常见的 GBK 解码
+        // Fallback to GBK
         let (decoded, _, _) = encoding_rs::GBK.decode(&buffer);
         Ok(decoded.into_owned())
     }
