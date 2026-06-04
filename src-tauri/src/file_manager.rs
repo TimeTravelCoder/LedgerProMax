@@ -75,7 +75,23 @@ impl FileManager {
             }
         }
 
-        fs::rename(src, &dest).map_err(|e| e.to_string())?;
+        // Try atomic rename first; fall back to copy+delete for cross-device/cross-volume moves
+        // (e.g. Desktop on C: → Workspace on E:) where fs::rename returns "cross-device link" error.
+        if let Err(rename_err) = fs::rename(src, &dest) {
+            use std::io::ErrorKind;
+            let cross_device = rename_err.raw_os_error().map_or(false, |code| {
+                // Windows: ERROR_NOT_SAME_DEVICE = 17
+                // Linux/POSIX: EXDEV = 18
+                code == 17 || code == 18
+            }) || rename_err.kind() == ErrorKind::Other;
+
+            if cross_device || rename_err.kind() == ErrorKind::PermissionDenied {
+                fs::copy(src, &dest).map_err(|e| format!("跨卷复制失败: {}", e))?;
+                fs::remove_file(src).map_err(|e| format!("源文件删除失败: {}", e))?;
+            } else {
+                return Err(format!("文件移动失败: {}", rename_err));
+            }
+        }
         Ok(dest)
     }
 
@@ -542,7 +558,17 @@ impl FileManager {
             }
         }
 
-        fs::rename(src, &dest).map_err(|e| e.to_string())?;
+        // Cross-volume safe move: try rename, fall back to copy+delete
+        if let Err(rename_err) = fs::rename(src, &dest) {
+            let cross_device = rename_err.raw_os_error().map_or(false, |c| c == 17 || c == 18)
+                || rename_err.kind() == std::io::ErrorKind::Other;
+            if cross_device {
+                fs::copy(src, &dest).map_err(|e| format!("跨卷复制失败: {}", e))?;
+                fs::remove_file(src).map_err(|e| format!("源文件删除失败: {}", e))?;
+            } else {
+                return Err(format!("文件移动失败: {}", rename_err));
+            }
+        }
 
         let new_rel_path = dest.strip_prefix(&ws_root).map_err(|_| "路径解析失败".to_string())?.to_string_lossy().replace("\\", "/");
 

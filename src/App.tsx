@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+﻿import { useState, useEffect, useRef, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -1074,6 +1074,10 @@ export default function App() {
 
   // Clear Desktop Non-Shortcut Files
   const handleCleanDesktop = async () => {
+    if (!workspaceDir || workspaceDir.trim() === "") {
+      showToast("请先在设置中配置工作区路径！", "warning");
+      return;
+    }
     try {
       addLog("开始一键整理桌面...");
       const result: [number, string[]] = await invoke("clean_desktop", { workspaceDir, inboxName });
@@ -1081,10 +1085,16 @@ export default function App() {
       addLog(`桌面整理完成！共收集 ${count} 个文档放入箱中。`);
       if (errors.length > 0) {
         errors.forEach(e => addLog(`[错误] ${e}`));
+        showToast(`整理完成，但 ${errors.length} 个文件移动失败，请查看日志。`, "warning");
+      } else if (count === 0) {
+        showToast("桌面暂无需要整理的普通文件 ✨", "info");
+      } else {
+        showToast(`已将 ${count} 个文件移入收集箱 📥`, "success");
       }
       await handleRefreshData();
     } catch (err: any) {
       addLog(`[错误] 桌面清理失败: ${err}`);
+      showToast(`整理失败: ${String(err)}`, "error");
     }
   };
 
