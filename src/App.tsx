@@ -285,7 +285,7 @@ export default function App() {
   const workspaceDirRef = useRef(workspaceDir);
   useEffect(() => { workspaceDirRef.current = workspaceDir; }, [workspaceDir]);
   const [workspaceLang, setWorkspaceLang] = useState<string>("zh-full");
-  const inboxName = workspaceLang.startsWith("en") ? "00Inbox" : "00收集箱";
+  const inboxName = (standardDirPresets[workspaceLang] || standardDirsZhFull)[0] || "00收集箱";
   const inboxNameRef = useRef(inboxName);
   useEffect(() => { inboxNameRef.current = inboxName; }, [inboxName]);
   const [monitoredDirs, setMonitoredDirs] = useState<string>("C:\\Users\\Ming\\Downloads");
@@ -590,7 +590,7 @@ export default function App() {
 
       setDesktopSummary(sum);
 
-      const isInbox = (fp: string) => fp.startsWith("00收集箱/") || fp.startsWith("00Inbox/");
+      const isInbox = (fp: string) => fp.startsWith(`${inboxName}/`);
       const inboxList = allFiles.filter(f => isInbox(f.filepath.replace(/\\/g, "/")));
       setInboxFiles(inboxList);
 
@@ -636,7 +636,7 @@ export default function App() {
       const allFiles = await handleScanWorkspace(currentWorkspaceDir);
       setActiveTab("inbox");
 
-      const isInbox = (fp: string) => fp.startsWith("00收集箱/") || fp.startsWith("00Inbox/");
+      const isInbox = (fp: string) => fp.startsWith(`${currentInboxName}/`);
       const inboxList = allFiles.filter(f => isInbox(f.filepath.replace(/\\/g, "/")));
       const importedFile = inboxList.find(f => f.filepath === finalRel);
       if (importedFile) {
