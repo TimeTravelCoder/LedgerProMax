@@ -1,11 +1,11 @@
 {
-  "version": "2.2.0",
-  "notes": "Ledger Pro Max v2.2.0 — 全板块 Bug 修复与稳定性防护加固完成！请查看 Release 说明获取更新详情。",
-  "pub_date": "2026-06-04T09:46:00Z",
+  "version": "2.2.1",
+  "notes": "Ledger Pro Max v2.2.1 — 修复了智能收集箱一键收集在特定工作空间预设模版下没有反应的问题。",
+  "pub_date": "2026-06-04T10:14:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRbXp4L0xBQVZ4ejVPaHEzdE1tbk9uM2hQWElmZ3hveWVKSUVML29mdWhoalpWblJ5MjZubElqTXhQUE1oOS9XTGZOVHZuaWtjOEFUTWppZTJvR3BueThqTEsxU1B6T2dFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNTY2MzYwCWZpbGU6TGVkZ2VyLlByby5NYXhfMi4yLjBfeDY0X3poLUNOLm1zaQpHQ1oxd2EwN0l0MFdibjR0RTRRT0pRRlpqdGVNaCtNUHZndTlpdlE5MHM0RGY2SC9UVjRFRjhkYVdSclZGVzR4WXd6eFA3MGJsMEM5NEtvNVN3TzdDQT09Cg==",
-      "url": "https://github.com/TimeTravelCoder/LedgerProMax/releases/download/v2.2.0/Ledger.Pro.Max_2.2.0_x64_zh-CN.msi"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRbXp4L0xBQVZ4enpVdmc0ZmJ6dWRaQzlrc2pQdGNzOFdDZnFuUnhFN3BPTElMYnRFekwwL0RHZzFac0kwbkZQMHpucm96Sjh2Q3JPdFA0YnlRSkE1dTRaQThyUGR6b0F3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNTY4NDM4CWZpbGU6TGVkZ2VyLlByby5NYXhfMi4yLjFfeDY0X3poLUNOX2dpdGh1Yi5tc2kKNHc2QTBRYmZvVGFxbUxkNjlmYWROdGFYdmlpeEZUQnpVakYxVmpoU0NDY1VIR25CK1Y5Tnp2VnVsMldsVWR6VEJkc2kxeUZBNG9LRDNWZlVvd0ZPQmc9PQo=",
+      "url": "https://github.com/TimeTravelCoder/LedgerProMax/releases/download/v2.2.1/Ledger.Pro.Max_2.2.1_x64_zh-CN.msi"
     }
   }
 }
