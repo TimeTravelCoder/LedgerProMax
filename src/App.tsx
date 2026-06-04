@@ -353,6 +353,7 @@ export default function App() {
   const [backupHistory, setBackupHistory] = useState<BackupHistoryRecord[]>([]);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isCleaningDesktop, setIsCleaningDesktop] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [inboxSort, setInboxSort] = useState<"name" | "size" | "time">("time");
   const [checkedInboxFiles, setCheckedInboxFiles] = useState<string[]>([]);
@@ -522,6 +523,7 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       addLog(`工作空间初始化失败: ${err}`);
+      showToast(`工作空间初始化失败: ${String(err)}`, "error");
     }
   };
 
@@ -647,6 +649,7 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       addLog(`[错误] 文件导入失败: ${err}`);
+      showToast(`文件导入失败: ${String(err)}`, "error");
     }
   }
 
@@ -1074,10 +1077,12 @@ export default function App() {
 
   // Clear Desktop Non-Shortcut Files
   const handleCleanDesktop = async () => {
+    if (isCleaningDesktop) return;
     if (!workspaceDir || workspaceDir.trim() === "") {
       showToast("请先在设置中配置工作区路径！", "warning");
       return;
     }
+    setIsCleaningDesktop(true);
     try {
       addLog("开始一键整理桌面...");
       const result: [number, string[]] = await invoke("clean_desktop", { workspaceDir, inboxName });
@@ -1095,6 +1100,8 @@ export default function App() {
     } catch (err: any) {
       addLog(`[错误] 桌面清理失败: ${err}`);
       showToast(`整理失败: ${String(err)}`, "error");
+    } finally {
+      setIsCleaningDesktop(false);
     }
   };
 
@@ -1154,6 +1161,7 @@ export default function App() {
       await handleRefreshData();
     } catch (err: any) {
       addBackupLog(`[错误] 备份失败: ${err}`);
+      showToast(`备份失败: ${String(err)}`, "error");
     } finally {
       setIsBackingUp(false);
     }
@@ -2423,8 +2431,8 @@ export default function App() {
                       )}
                     </p>
                   </div>
-                  <button className="btn btn-primary" onClick={handleCleanDesktop}>
-                    🧹 一键整理到收集箱
+                  <button className="btn btn-primary" onClick={handleCleanDesktop} disabled={isCleaningDesktop} style={{opacity: isCleaningDesktop ? 0.65 : 1, cursor: isCleaningDesktop ? "not-allowed" : "pointer"}}>
+                    {isCleaningDesktop ? "⏳ 整理中..." : "🧹 一键整理到收集箱"}
                   </button>
                 </div>
 
