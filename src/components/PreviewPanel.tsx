@@ -117,7 +117,7 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
   const isBinary = [".zip", ".rar", ".7z", ".exe", ".dll", ".dmg", ".pkg", ".tar", ".gz"].includes(fileExt);
 
   // Absolute path of the file for local preview
-  const absolutePath = `${workspaceDir}/${filepath}`.replace(/\//g, "\\");
+  const absolutePath = `${workspaceDir}/${filepath}`;
 
   useEffect(() => {
     if (isImage || isPdf || isBinary) return;
@@ -409,6 +409,7 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
       const lines = content.split("\n");
       let insideCodeBlock = false;
       let codeBlockContent: string[] = [];
+      let codeBlockLang = ".txt";
       const isLightTheme = theme === "light";
 
       return (
@@ -422,13 +423,17 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
                 insideCodeBlock = false;
                 const code = codeBlockContent.join("\n");
                 codeBlockContent = [];
+                const currentLang = codeBlockLang;
+                codeBlockLang = ".txt";
                 return (
                   <pre key={idx} style={{ background: isLightTheme ? "#f8fafc" : "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "8px", border: isLightTheme ? "1px solid rgba(0,0,0,0.08)" : "1px solid var(--border-light)", fontFamily: "var(--mono)", fontSize: "12px", overflowX: "auto", margin: "12px 0", color: isLightTheme ? "#334155" : "#abb2bf" }}>
-                    {highlightCode(code, ".js", isLightTheme)}
+                    {highlightCode(code, currentLang, isLightTheme)}
                   </pre>
                 );
               } else {
                 insideCodeBlock = true;
+                const lang = trimmed.slice(3).trim();
+                codeBlockLang = lang ? `.${lang}` : ".txt";
                 return null;
               }
             }
@@ -449,18 +454,18 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
               return <h3 key={idx} style={{ fontSize: "15px", fontWeight: 600, margin: "14px 0 6px 0", color: "var(--color-primary)" }}>{trimmed.slice(4)}</h3>;
             }
 
-            // Bullet lists
+            // Bullet points
             if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
               return (
-                <li key={idx} style={{ marginLeft: "20px", marginBottom: "4px", listStyleType: "disc" }}>
+                <li key={idx} style={{ marginLeft: "20px", marginBottom: "4px" }}>
                   {trimmed.slice(2)}
                 </li>
               );
             }
 
             // Numbered lists
-            if (/^\d+\.\s/.test(trimmed)) {
-              const dotIdx = trimmed.indexOf(".");
+            const dotIdx = trimmed.indexOf(". ");
+            if (dotIdx > 0 && !isNaN(Number(trimmed.substring(0, dotIdx)))) {
               return (
                 <li key={idx} style={{ marginLeft: "20px", marginBottom: "4px", listStyleType: "decimal" }}>
                   {trimmed.slice(dotIdx + 2)}
@@ -487,7 +492,7 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
           })}
           {insideCodeBlock && codeBlockContent.length > 0 && (
             <pre style={{ background: isLightTheme ? "#f8fafc" : "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "8px", border: isLightTheme ? "1px solid rgba(0,0,0,0.08)" : "1px solid var(--border-light)", fontFamily: "var(--mono)", fontSize: "12px", overflowX: "auto", margin: "12px 0", color: isLightTheme ? "#334155" : "#abb2bf" }}>
-              {highlightCode(codeBlockContent.join("\n"), ".js", isLightTheme)}
+              {highlightCode(codeBlockContent.join("\n"), codeBlockLang, isLightTheme)}
             </pre>
           )}
         </div>

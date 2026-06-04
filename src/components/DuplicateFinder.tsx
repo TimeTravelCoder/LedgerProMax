@@ -3,12 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { Trash2, Sparkles, RefreshCw, AlertCircle, CheckCircle } from "lucide-react";
 
 interface FileRecord {
-  filepath: String;
-  filename: String;
+  filepath: string;
+  filename: string;
   file_size: number;
   modified_time: number;
-  tags: String;
-  description: String;
+  tags: string;
+  description: string;
   backup_disk_status: number;
   backup_cloud_status: number;
 }

@@ -52,9 +52,33 @@ async fn search_files(
     query: Option<String>,
     selected_tags: Option<Vec<String>>,
     file_status: Option<String>,
+    extension: Option<String>,
 ) -> Result<Vec<FileRecord>, String> {
     let db = DatabaseManager::new(&workspace_dir);
-    db.search_files(query, selected_tags, file_status).map_err(|e| e.to_string())
+    let mut files = db.search_files(query, selected_tags, file_status).map_err(|e| e.to_string())?;
+
+    if let Some(ext_filter) = extension {
+        if !ext_filter.is_empty() {
+            files.retain(|f| {
+                let ext = std::path::Path::new(&f.filename)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                
+                match ext_filter.as_str() {
+                    "pdf" => ext == "pdf",
+                    "image" => vec!["png", "jpg", "jpeg", "gif", "webp", "svg"].contains(&ext.as_str()),
+                    "doc" => vec!["doc", "docx", "txt", "md", "xlsx", "xls", "csv", "ppt", "pptx"].contains(&ext.as_str()),
+                    "code" => vec!["py", "js", "ts", "tsx", "jsx", "json"].contains(&ext.as_str()),
+                    "archive" => vec!["zip", "rar", "7z", "tar", "gz"].contains(&ext.as_str()),
+                    _ => true,
+                }
+            });
+        }
+    }
+
+    Ok(files)
 }
 
 #[tauri::command]
@@ -335,34 +359,41 @@ fn read_file_content(workspace_dir: String, filepath: String) -> Result<String, 
 
     use std::io::Read;
     let file = fs::File::open(&abs_path).map_err(|e| e.to_string())?;
+    let file_len = file.metadata().map(|m| m.len()).unwrap_or(0);
+    let truncated = file_len > 102400;
+
     let mut buffer = Vec::new();
     let mut handle = file.take(102400); // 限制最大读取 100KB
     handle.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
 
     // Detect BOM and decode accordingly
-    // UTF-16 LE BOM
-    if buffer.len() >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE {
+    let decoded = if buffer.len() >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE {
         let (decoded, _, _) = encoding_rs::UTF_16LE.decode(&buffer);
-        return Ok(decoded.into_owned());
-    }
-    // UTF-16 BE BOM
-    if buffer.len() >= 2 && buffer[0] == 0xFE && buffer[1] == 0xFF {
+        decoded.into_owned()
+    } else if buffer.len() >= 2 && buffer[0] == 0xFE && buffer[1] == 0xFF {
         let (decoded, _, _) = encoding_rs::UTF_16BE.decode(&buffer);
-        return Ok(decoded.into_owned());
-    }
-    // Strip UTF-8 BOM if present
-    let start = if buffer.len() >= 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF {
-        3
+        decoded.into_owned()
     } else {
-        0
+        // Strip UTF-8 BOM if present
+        let start = if buffer.len() >= 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF {
+            3
+        } else {
+            0
+        };
+        // Try UTF-8
+        if let Ok(utf8_str) = String::from_utf8(buffer[start..].to_vec()) {
+            utf8_str
+        } else {
+            // Fallback to GBK
+            let (decoded, _, _) = encoding_rs::GBK.decode(&buffer);
+            decoded.into_owned()
+        }
     };
-    // Try UTF-8
-    if let Ok(utf8_str) = String::from_utf8(buffer[start..].to_vec()) {
-        Ok(utf8_str)
+
+    if truncated {
+        Ok(decoded + "\n\n⚠️ 文件过大，仅显示前 100KB 内容...")
     } else {
-        // Fallback to GBK
-        let (decoded, _, _) = encoding_rs::GBK.decode(&buffer);
-        Ok(decoded.into_owned())
+        Ok(decoded)
     }
 }
 
