@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -1158,6 +1158,7 @@ export default function App() {
       const msg: string = await invoke("perform_backup", { backupType: type, workspaceDir, destDir: targetDir });
       addBackupLog(msg);
       addBackupLog(`[完整性校验] SHA-256 镜像完整度校验完成，副本与源完全一致。🛡️`);
+      showToast(`备份成功！${msg}`, "success");
       await handleRefreshData();
     } catch (err: any) {
       addBackupLog(`[错误] 备份失败: ${err}`);
@@ -2386,7 +2387,13 @@ export default function App() {
                                     预览
                                   </button>
                                   <button 
-                                    onClick={() => invoke("open_in_system", { workspaceDir, filepath: file.filepath })}
+                                    onClick={async () => {
+                                      try {
+                                        await invoke("open_in_system", { workspaceDir, filepath: file.filepath });
+                                      } catch (err: any) {
+                                        showToast(`无法在系统默认应用中打开文件: ${String(err)}`, "error");
+                                      }
+                                    }}
                                     className="btn"
                                     style={{
                                       padding: "4px 8px",
@@ -4517,8 +4524,8 @@ export default function App() {
                           <h3 style={{fontSize: "15px", fontWeight: 600}}>私有云盘异地备份</h3>
                         </div>
                         <p style={{fontSize: "12px", color: "var(--text-secondary)"}}>同步数据至百度云/坚果云/OneDrive等挂载盘完成异地多活备份。</p>
-                        <button className="btn" onClick={() => handleRunBackup("cloud")} style={{width: "100%", justifyContent: "center", borderColor: "var(--color-success)", color: "var(--color-success)"}}>
-                          开始云盘备份
+                        <button className="btn" onClick={() => handleRunBackup("cloud")} disabled={isBackingUp} style={{width: "100%", justifyContent: "center", borderColor: "var(--color-success)", color: "var(--color-success)", opacity: isBackingUp ? 0.6 : 1}}>
+                          {isBackingUp ? "⏳ 备份中..." : "开始云盘备份"}
                         </button>
                       </div>
                     </div>
@@ -5349,6 +5356,7 @@ export default function App() {
               onRefreshWorkspace={handleRefreshData} 
               addLog={addLog} 
               theme={theme}
+              showToast={showToast}
             />
           )}
 
@@ -5734,9 +5742,13 @@ export default function App() {
           </div>
           <div 
             className="context-menu-item"
-            onClick={() => {
+            onClick={async () => {
               if (contextMenu.file) {
-                invoke("open_in_system", { workspaceDir, filepath: contextMenu.file.filepath });
+                try {
+                  await invoke("open_in_system", { workspaceDir, filepath: contextMenu.file.filepath });
+                } catch (err: any) {
+                  showToast(`无法在系统默认应用中打开文件: ${String(err)}`, "error");
+                }
               }
               setContextMenu(prev => ({ ...prev, show: false }));
             }}

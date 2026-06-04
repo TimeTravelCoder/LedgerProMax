@@ -18,9 +18,10 @@ interface DuplicateFinderProps {
   onRefreshWorkspace: () => void;
   addLog: (msg: string) => void;
   theme?: "dark" | "jade" | "light";
+  showToast?: (msg: string, type?: "error" | "info" | "warning" | "success", duration?: number) => void;
 }
 
-export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addLog, theme = "dark" }: DuplicateFinderProps) {
+export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addLog, theme = "dark", showToast }: DuplicateFinderProps) {
   const [mode, setMode] = useState<"filename" | "size" | "hash">("filename");
   const [loading, setLoading] = useState<boolean>(false);
   const [duplicateGroups, setDuplicateGroups] = useState<Record<string, FileRecord[]>>({});
@@ -41,9 +42,13 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
       Object.values(groups).forEach(g => { countFiles += g.length; });
       
       addLog(`查重扫描完成！发现 ${countGroups} 组重复文件，共计 ${countFiles} 个拷贝。`);
+      if (countGroups === 0) {
+        showToast?.("未发现重复文件，工作空间很干净！✨", "info");
+      }
     } catch (err: any) {
       console.error(err);
       addLog(`[错误] 查重失败: ${err}`);
+      showToast?.(`查重扫描失败: ${String(err)}`, "error");
     } finally {
       setLoading(false);
     }
@@ -113,6 +118,11 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
     }
 
     addLog(`重复清理完毕！成功清理 ${deletedCount} 个副本文件${errorCount > 0 ? `，失败 ${errorCount} 个` : ""}`);
+    if (errorCount > 0) {
+      showToast?.(`清理完成，但 ${errorCount} 个文件删除失败`, "warning");
+    } else {
+      showToast?.("重复文件清理完成！", "success");
+    }
     setCheckedFiles([]);
     
     // Rescan duplicates after cleanup
