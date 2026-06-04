@@ -199,6 +199,7 @@ export default function App() {
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
   const [theme, setTheme] = useState<"dark" | "light">((localStorage.getItem("theme") as "dark" | "light") || "light");
+  const [settingsSubTab, setSettingsSubTab] = useState<"paths" | "tags" | "rules">("paths");
   // Track whether user is editing metadata mode
 
   // App State Restoration
@@ -2387,6 +2388,17 @@ export default function App() {
                       <button onClick={() => { setInboxMultiMode(!inboxMultiMode); setCheckedInboxFiles([]); }} style={{fontSize: "11px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--border-light)", background: inboxMultiMode ? "var(--color-primary)" : "var(--bg-secondary)", color: inboxMultiMode ? "#fff" : "var(--text-secondary)", cursor: "pointer"}}>
                         {inboxMultiMode ? "取消多选" : "多选"}
                       </button>
+                      {inboxMultiMode && inboxFiles.length > 0 && (
+                        <button onClick={() => {
+                          if (checkedInboxFiles.length === inboxFiles.length) {
+                            setCheckedInboxFiles([]);
+                          } else {
+                            setCheckedInboxFiles(inboxFiles.map(f => f.filepath.toString()));
+                          }
+                        }} style={{fontSize: "11px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--border-light)", background: "var(--bg-secondary)", color: "var(--text-secondary)", cursor: "pointer"}}>
+                          {checkedInboxFiles.length === inboxFiles.length ? "取消全选" : "全选"}
+                        </button>
+                      )}
                       {inboxMultiMode && checkedInboxFiles.length > 0 && (
                         <button onClick={async () => {
                           setInboxMultiMode(false);
@@ -3703,7 +3715,43 @@ export default function App() {
                   <div className="cyber-card" style={{height: "100%", display: "flex", flexDirection: "column", gap: "20px", overflow: "hidden"}}>
                     <div>
                       <h3 className="card-title" style={{fontSize: "16px"}}>{selectedWorkspaceFile.filename}</h3>
-                      <p style={{fontSize: "12px", color: "var(--text-muted)", marginTop: "4px", wordBreak: "break-all"}}>{selectedWorkspaceFile.filepath}</p>
+                      <div style={{fontSize: "12px", color: "var(--text-muted)", marginTop: "4px", wordBreak: "break-all", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px"}}>
+                        {(() => {
+                          const normalized = selectedWorkspaceFile.filepath.toString().replace(/\\/g, "/");
+                          const parts = normalized.split("/");
+                          const elements: any[] = [];
+                          let accum = "";
+                          for (let i = 0; i < parts.length; i++) {
+                            const isLast = i === parts.length - 1;
+                            const part = parts[i];
+                            if (i > 0) {
+                              accum += "/";
+                            }
+                            accum += part;
+                            const currentAccum = accum;
+                            if (isLast) {
+                              elements.push(<span key={i} style={{color: "var(--text-secondary)"}}>{part}</span>);
+                            } else {
+                              elements.push(
+                                <span 
+                                  key={i} 
+                                  onClick={() => setSelectedCategory(currentAccum)}
+                                  style={{
+                                    cursor: "pointer", 
+                                    color: "var(--color-primary)", 
+                                    textDecoration: "underline"
+                                  }}
+                                  title={`跳转到目录: ${currentAccum}`}
+                                >
+                                  {part}
+                                </span>
+                              );
+                              elements.push(<span key={`slash-${i}`} style={{margin: "0 2px"}}>/</span>);
+                            }
+                          }
+                          return elements;
+                        })()}
+                      </div>
                     </div>
 
                     <div style={{display: "flex", flexDirection: "column", gap: "16px", flex: 1, overflowY: "auto", paddingRight: "4px", minHeight: 0}}>
@@ -4501,7 +4549,7 @@ export default function App() {
 
           {/* 4. SETTINGS TAB */}
           {activeTab === "settings" && (
-            <div className="settings-shell" style={{ overflowY: "auto", flex: 1, height: "100%", paddingRight: "6px", paddingBottom: "30px" }}>
+            <div className="settings-shell" style={{ overflowY: "auto", flex: 1, height: "100%", paddingRight: "6px", paddingBottom: "30px", display: "flex", flexDirection: "column" }}>
               <div className="settings-header">
                 <div>
                   <span className="pro-max-kicker">Pro Control</span>
@@ -4522,7 +4570,57 @@ export default function App() {
                 <div><strong>{backupScore}</strong><span>备份指数</span></div>
               </div>
 
-              <section className="settings-section">
+              {/* Fluent Segmented Control Sub-navigation */}
+              <div style={{
+                display: "flex",
+                background: theme === "light" ? "rgba(0, 0, 0, 0.03)" : "rgba(255, 255, 255, 0.03)",
+                padding: "4px",
+                borderRadius: "10px",
+                border: "1px solid var(--border-light)",
+                gap: "4px",
+                marginBottom: "20px",
+                flexShrink: 0
+              }}>
+                {[
+                  { key: "paths" as const, label: "🌐 基础路径与初始化" },
+                  { key: "tags" as const, label: "🏷️ 可视化标签池" },
+                  { key: "rules" as const, label: "🤖 整理与命名规则" }
+                ].map(sub => (
+                  <button
+                    key={sub.key}
+                    type="button"
+                    onClick={() => setSettingsSubTab(sub.key)}
+                    style={{
+                      flex: 1,
+                      padding: "8px 16px",
+                      borderRadius: "8px",
+                      border: "none",
+                      background: settingsSubTab === sub.key
+                        ? (theme === "light" ? "#fff" : "rgba(255, 255, 255, 0.08)")
+                        : "transparent",
+                      color: settingsSubTab === sub.key
+                        ? "var(--color-primary)"
+                        : "var(--text-secondary)",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      boxShadow: settingsSubTab === sub.key && theme === "light"
+                        ? "0 2px 8px rgba(0,0,0,0.06)"
+                        : "none",
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    {sub.label}
+                  </button>
+                ))}
+              </div>
+
+              {settingsSubTab === "paths" && (
+                <section className="settings-section">
                 <div className="settings-section__title">
                   <h4>路径与备份目标</h4>
                   <span>真实校验目录状态，降低保存后才发现路径不可用的概率。</span>
@@ -4734,12 +4832,14 @@ export default function App() {
                     <div className="settings-status ok" style={{ marginTop: "6px" }}>
                       当前模板将创建 <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{(standardDirPresets[workspaceLang] || standardDirsZhFull).length}</span> 个基础目录：
                       <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{(standardDirPresets[workspaceLang] || standardDirsZhFull).slice(0, 6).join("、")}{ (standardDirPresets[workspaceLang] || standardDirsZhFull).length > 6 ? "..." : "" }</span>
-                    </div>
                   </div>
                 </div>
-              </section>
+              </div>
+            </section>
+            )}
 
-              <section className="settings-section">
+              {settingsSubTab === "tags" && (
+                <section className="settings-section">
                 <div className="settings-section__title">
                   <h4>VisualTagPool 可视化标签池</h4>
                   <span>支持新增、搜索、重命名和删除，方便维护长期标签体系。</span>
@@ -4805,8 +4905,11 @@ export default function App() {
                   </div>
                 ))}
               </section>
+              )}
 
-              <section className="settings-section">
+              {settingsSubTab === "rules" && (
+                <>
+                  <section className="settings-section">
                 <div className="settings-section__title">
                   <h4>📁 可视化命名模板自定义管理器</h4>
                   <span>定义并扩展智能收集箱里的文档命名模板。支持 `{"{date}"}`, `{"{topic}"}`, `{"{version}"}`, `{"{status}"}` 变量。</span>
@@ -4966,6 +5069,8 @@ export default function App() {
                   ))}
                 </div>
               </section>
+                </>
+              )}
 
               <div className="settings-savebar">
                 <div className={`settings-status ${saveStatus === "error" ? "warn" : saveStatus === "saved" ? "ok" : ""}`}>

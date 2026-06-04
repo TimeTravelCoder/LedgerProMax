@@ -65,6 +65,25 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
     setCheckedFiles(toDelete);
     addLog(`智能推荐勾选完成！已推荐选中 ${toDelete.length} 个冗余多余副本。`);
   };
+  
+  const handleInvertSelect = () => {
+    const allFilepaths: string[] = [];
+    Object.values(duplicateGroups).forEach(group => {
+      group.forEach(file => {
+        allFilepaths.push(file.filepath.toString());
+      });
+    });
+    setCheckedFiles(prev => {
+      const nextChecked: string[] = [];
+      allFilepaths.forEach(fp => {
+        if (!prev.includes(fp)) {
+          nextChecked.push(fp);
+        }
+      });
+      return nextChecked;
+    });
+    addLog("执行一键反选成功！");
+  };
 
   const handleToggleCheck = (filepath: string) => {
     if (checkedFiles.includes(filepath)) {
@@ -161,21 +180,30 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
         </button>
 
         {groupKeys.length > 0 && (
-          <button
-            onClick={handleAutoSelect}
-            className="btn"
-            style={{ borderColor: "var(--color-warning)", color: "var(--color-warning)", flex: 1, justifyContent: "center" }}
-          >
-            <Sparkles size={14} style={{ marginRight: "6px" }} />
-            <span>智能一键勾选</span>
-          </button>
+          <>
+            <button
+              onClick={handleAutoSelect}
+              className="btn"
+              style={{ borderColor: "var(--color-warning)", color: "var(--color-warning)", flex: 1, justifyContent: "center" }}
+            >
+              <Sparkles size={14} style={{ marginRight: "6px" }} />
+              <span>智能一键勾选</span>
+            </button>
+            <button
+              onClick={handleInvertSelect}
+              className="btn"
+              style={{ borderColor: "var(--border-light)", color: "var(--text-secondary)", flex: 1, justifyContent: "center" }}
+            >
+              <span>一键反选</span>
+            </button>
+          </>
         )}
       </div>
 
       {/* Scanning Content Grid */}
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "4px" }}>
         {loading ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "200px", color: "var(--text-secondary)" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyItems: "center", height: "200px", color: "var(--text-secondary)" }}>
             <div className="spinner" style={{ marginBottom: "12px" }} />
             <p style={{ fontSize: "13px" }}>正在进行深度磁盘比对扫描，请稍候...</p>
           </div>
@@ -200,12 +228,16 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
             {groupKeys.map((groupKey, groupIdx) => {
               const group = duplicateGroups[groupKey];
               const displayKey = mode === "hash" ? `HASH: ${groupKey.substring(0, 16)}...` : mode === "size" ? `大小: ${formatSize(parseFloat(groupKey))}` : `文件名: ${groupKey}`;
+              const isEven = groupIdx % 2 === 0;
+              const groupBg = theme === "light"
+                ? (isEven ? "rgba(0, 0, 0, 0.015)" : "rgba(99, 102, 241, 0.035)")
+                : (isEven ? "rgba(255, 255, 255, 0.015)" : "rgba(99, 102, 241, 0.04)");
 
               return (
                 <div
                   key={groupIdx}
                   style={{
-                    background: theme === "light" ? "var(--bg-secondary)" : "rgba(255,255,255,0.015)",
+                    background: groupBg,
                     border: "1px solid var(--border-light)",
                     borderRadius: "10px",
                     overflow: "hidden",
@@ -214,7 +246,7 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
                   {/* Group header */}
                   <div
                     style={{
-                      background: theme === "light" ? "rgba(0, 0, 0, 0.02)" : "rgba(255,255,255,0.03)",
+                      background: theme === "light" ? "rgba(0, 0, 0, 0.02)" : "rgba(255, 255, 255, 0.03)",
                       padding: "8px 12px",
                       fontSize: "12px",
                       fontWeight: 600,
