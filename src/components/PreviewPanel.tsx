@@ -11,6 +11,63 @@ interface PreviewPanelProps {
   layout?: "modal" | "inline";
 }
 
+const highlightCode = (rawText: string, fileExt: string, isLight: boolean) => {
+  let escaped = rawText
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  const colors = isLight ? {
+    keyword: "#a71d5d",
+    string: "#183691",
+    number: "#0086b3",
+    comment: "#969896",
+  } : {
+    keyword: "#c678dd",
+    string: "#98c379",
+    number: "#d19a66",
+    comment: "#5c6370",
+  };
+
+  const ext = fileExt.toLowerCase();
+  const stringsPlaceholder: string[] = [];
+  
+  escaped = escaped.replace(/(["'`])((?:\\.|[^\\])*?)\1/g, (_, quote, strContent) => {
+    const placeholder = `___STR_PLACEHOLDER_${stringsPlaceholder.length}___`;
+    stringsPlaceholder.push(`<span style="color: ${colors.string}">${quote}${strContent}${quote}</span>`);
+    return placeholder;
+  });
+
+  const commentsPlaceholder: string[] = [];
+  if (ext === ".py" || ext === ".yaml" || ext === ".yml" || ext === ".sh" || ext === ".toml" || ext === ".ini" || ext === ".cfg") {
+    escaped = escaped.replace(/(#.*)/g, (_, comment) => {
+      const placeholder = `___COM_PLACEHOLDER_${commentsPlaceholder.length}___`;
+      commentsPlaceholder.push(`<span style="color: ${colors.comment}; font-style: italic;">${comment}</span>`);
+      return placeholder;
+    });
+  } else {
+    escaped = escaped.replace(/(\/\/.*)/g, (_, comment) => {
+      const placeholder = `___COM_PLACEHOLDER_${commentsPlaceholder.length}___`;
+      commentsPlaceholder.push(`<span style="color: ${colors.comment}; font-style: italic;">${comment}</span>`);
+      return placeholder;
+    });
+  }
+
+  const keywordsList = /\b(const|let|var|function|return|import|export|from|class|extends|if|else|for|while|do|break|continue|switch|case|default|try|catch|finally|throw|new|this|typeof|instanceof|async|await|def|fn|pub|use|mod|struct|impl|enum|as|in|print|self|and|or|not|elif|pass|lambda|true|false|nil|null|undefined|void|public|private|protected|static|final|interface|implements|package|type|any|string|number|boolean|Record|Vec|String|Option|Result|int|float|double|char|auto|const_cast|reinterpret_cast|static_cast|dynamic_cast|nullptr)\b/g;
+  escaped = escaped.replace(keywordsList, `<span style="color: ${colors.keyword}; font-weight: 600;">$1</span>`);
+  escaped = escaped.replace(/\b(\d+)\b/g, `<span style="color: ${colors.number}">$1</span>`);
+
+  commentsPlaceholder.forEach((replacement, idx) => {
+    escaped = escaped.replace(`___COM_PLACEHOLDER_${idx}___`, replacement);
+  });
+
+  stringsPlaceholder.forEach((replacement, idx) => {
+    escaped = escaped.replace(`___STR_PLACEHOLDER_${idx}___`, replacement);
+  });
+
+  return <span dangerouslySetInnerHTML={{ __html: escaped }} />;
+};
+
 export default function PreviewPanel({ workspaceDir, filepath, filename, theme = "dark", onClose, layout = "modal" }: PreviewPanelProps) {
   const [content, setContent] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
@@ -366,8 +423,8 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
                 const code = codeBlockContent.join("\n");
                 codeBlockContent = [];
                 return (
-                  <pre key={idx} style={{ background: isLightTheme ? "#f8fafc" : "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "8px", border: isLightTheme ? "1px solid rgba(0,0,0,0.08)" : "1px solid var(--border-light)", fontFamily: "var(--mono)", fontSize: "12px", overflowX: "auto", margin: "12px 0", color: isLightTheme ? "#0969da" : "#60a5fa" }}>
-                    <code>{code}</code>
+                  <pre key={idx} style={{ background: isLightTheme ? "#f8fafc" : "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "8px", border: isLightTheme ? "1px solid rgba(0,0,0,0.08)" : "1px solid var(--border-light)", fontFamily: "var(--mono)", fontSize: "12px", overflowX: "auto", margin: "12px 0", color: isLightTheme ? "#334155" : "#abb2bf" }}>
+                    {highlightCode(code, ".js", isLightTheme)}
                   </pre>
                 );
               } else {
@@ -429,8 +486,8 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
             return line === "" ? <div key={idx} style={{ height: "8px" }} /> : <p key={idx} style={{ marginBottom: "8px" }}>{line}</p>;
           })}
           {insideCodeBlock && codeBlockContent.length > 0 && (
-            <pre style={{ background: isLightTheme ? "#f8fafc" : "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "8px", border: isLightTheme ? "1px solid rgba(0,0,0,0.08)" : "1px solid var(--border-light)", fontFamily: "var(--mono)", fontSize: "12px", overflowX: "auto", margin: "12px 0", color: isLightTheme ? "#0969da" : "#60a5fa" }}>
-              <code>{codeBlockContent.join("\n")}</code>
+            <pre style={{ background: isLightTheme ? "#f8fafc" : "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "8px", border: isLightTheme ? "1px solid rgba(0,0,0,0.08)" : "1px solid var(--border-light)", fontFamily: "var(--mono)", fontSize: "12px", overflowX: "auto", margin: "12px 0", color: isLightTheme ? "#334155" : "#abb2bf" }}>
+              {highlightCode(codeBlockContent.join("\n"), ".js", isLightTheme)}
             </pre>
           )}
         </div>
@@ -450,7 +507,7 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
           border: isLightTheme ? "1px solid rgba(0,0,0,0.08)" : "1px solid var(--border-light)",
           fontFamily: "var(--mono)",
           fontSize: "13px",
-          color: isCode ? (isLightTheme ? "#0f766e" : "#34d399") : "var(--text-primary)",
+          color: isLightTheme ? "#334155" : "#abb2bf",
           overflowX: "auto",
           textAlign: "left",
           whiteSpace: "pre-wrap",
@@ -459,7 +516,7 @@ export default function PreviewPanel({ workspaceDir, filepath, filename, theme =
           maxHeight: layout === "modal" ? "58vh" : "260px",
         }}
       >
-        <code>{content || "(空文件)"}</code>
+        {isCode ? highlightCode(content || "", fileExt, isLightTheme) : <code>{content || "(空文件)"}</code>}
       </pre>
     );
   };

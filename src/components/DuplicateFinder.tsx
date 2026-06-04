@@ -232,6 +232,8 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     {group.map((file, fileIdx) => {
                       const isChecked = checkedFiles.includes(file.filepath.toString());
+                      const firstUnchecked = group.find(f => !checkedFiles.includes(f.filepath.toString()));
+                      const isKeeper = firstUnchecked && firstUnchecked.filepath === file.filepath;
                       return (
                         <div
                           key={fileIdx}
@@ -243,7 +245,7 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
                             justifyContent: "space-between",
                             fontSize: "12px",
                             cursor: "pointer",
-                            background: isChecked ? "rgba(239, 68, 68, 0.03)" : "transparent",
+                            background: isChecked ? (theme === "light" ? "rgba(239, 68, 68, 0.04)" : "rgba(239, 68, 68, 0.02)") : "transparent",
                             borderBottom: fileIdx < group.length - 1 ? "1px solid var(--border-light)" : "none",
                           }}
                         >
@@ -255,15 +257,53 @@ export default function DuplicateFinder({ workspaceDir, onRefreshWorkspace, addL
                               style={{ pointerEvents: "none", cursor: "pointer" }}
                             />
                             <div style={{ overflow: "hidden" }}>
-                              <div style={{ fontWeight: 500, color: "var(--text-primary)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{file.filepath}</div>
+                              <div style={{ 
+                                fontWeight: 500, 
+                                color: isChecked ? "var(--text-muted)" : "var(--text-primary)", 
+                                textDecoration: isChecked ? "line-through" : "none",
+                                opacity: isChecked ? 0.7 : 1,
+                                textOverflow: "ellipsis", 
+                                overflow: "hidden", 
+                                whiteSpace: "nowrap" 
+                              }}>
+                                {file.filepath}
+                              </div>
                               <div style={{ color: "var(--text-muted)", fontSize: "10px", marginTop: "2px" }}>
                                 修改时间: {new Date(file.modified_time * 1000).toLocaleString()}
                               </div>
                             </div>
                           </div>
-                          <span style={{ fontSize: "11px", color: "var(--text-secondary)", flexShrink: 0, marginLeft: "10px" }}>
-                            {formatSize(file.file_size)}
-                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0, marginLeft: "10px" }}>
+                            {isKeeper && (
+                              <span style={{
+                                fontSize: "10px",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                background: "rgba(16, 185, 129, 0.08)",
+                                color: "#10b981",
+                                border: "1px solid rgba(16, 185, 129, 0.2)",
+                                fontWeight: 600
+                              }}>
+                                ✅ 建议保留
+                              </span>
+                            )}
+                            {isChecked && (
+                              <span style={{
+                                fontSize: "10px",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                background: "rgba(239, 68, 68, 0.08)",
+                                color: "#f87171",
+                                border: "1px solid rgba(239, 68, 68, 0.2)",
+                                fontWeight: 600
+                              }}>
+                                🗑️ 即将清理
+                              </span>
+                            )}
+                            <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                              {formatSize(file.file_size)}
+                            </span>
+                          </div>
                         </div>
                       );
                     })}

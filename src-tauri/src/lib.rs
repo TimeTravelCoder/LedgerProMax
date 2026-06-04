@@ -20,29 +20,34 @@ pub struct WatcherState {
 }
 
 #[tauri::command]
-fn init_workspace(workspace_dir: String, dirs: Vec<String>) -> Result<(), String> {
+async fn init_workspace(workspace_dir: String, dirs: Vec<String>) -> Result<(), String> {
     FileManager::init_workspace(&workspace_dir, dirs)
 }
 
 #[tauri::command]
-fn init_project(project_name: String, workspace_dir: String, standard_dirs: Vec<String>) -> Result<(), String> {
-    FileManager::init_project_structure(&project_name, &workspace_dir, standard_dirs)
+async fn init_project(project_name: String, workspace_dir: String, project_root_dir: String) -> Result<(), String> {
+    FileManager::init_project_structure(&project_name, &workspace_dir, &project_root_dir)
 }
 
 #[tauri::command]
-fn create_folder(relative_path: String, workspace_dir: String) -> Result<(), String> {
+async fn create_folder(relative_path: String, workspace_dir: String) -> Result<(), String> {
     FileManager::create_folder(&relative_path, &workspace_dir)
 }
 
+#[tauri::command]
+async fn create_file(relative_path: String, content: String, workspace_dir: String) -> Result<(), String> {
+    FileManager::create_file(&relative_path, &content, &workspace_dir)
+}
+
 
 #[tauri::command]
-fn scan_workspace(workspace_dir: String) -> Result<i32, String> {
+async fn scan_workspace(workspace_dir: String) -> Result<i32, String> {
     let db = DatabaseManager::new(&workspace_dir);
     FileManager::scan_workspace_files(&workspace_dir, &db)
 }
 
 #[tauri::command]
-fn search_files(
+async fn search_files(
     workspace_dir: String,
     query: Option<String>,
     selected_tags: Option<Vec<String>>,
@@ -53,25 +58,25 @@ fn search_files(
 }
 
 #[tauri::command]
-fn update_file_tags(workspace_dir: String, filepath: String, tags: Vec<String>) -> Result<(), String> {
+async fn update_file_tags(workspace_dir: String, filepath: String, tags: Vec<String>) -> Result<(), String> {
     let db = DatabaseManager::new(&workspace_dir);
     db.update_file_tags(&filepath, tags).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn update_file_description(workspace_dir: String, filepath: String, description: String) -> Result<(), String> {
+async fn update_file_description(workspace_dir: String, filepath: String, description: String) -> Result<(), String> {
     let db = DatabaseManager::new(&workspace_dir);
     db.update_file_description(&filepath, &description).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn delete_file(workspace_dir: String, filepath: String) -> Result<(), String> {
+async fn delete_file(workspace_dir: String, filepath: String) -> Result<(), String> {
     let db = DatabaseManager::new(&workspace_dir);
     FileManager::delete_file(&filepath, &workspace_dir, &db)
 }
 
 #[tauri::command]
-fn rename_file(workspace_dir: String, old_filepath: String, new_filepath: String, new_filename: String) -> Result<(), String> {
+async fn rename_file(workspace_dir: String, old_filepath: String, new_filepath: String, new_filename: String) -> Result<(), String> {
     let db = DatabaseManager::new(&workspace_dir);
     
     // 0. Validate: new_filename must not contain path separators (prevents directory traversal via rename)
@@ -115,7 +120,7 @@ fn rename_file(workspace_dir: String, old_filepath: String, new_filepath: String
 }
 
 #[tauri::command]
-fn organize_file(
+async fn organize_file(
     workspace_dir: String,
     src_path: String,
     dest_rel_path: String,
@@ -126,29 +131,29 @@ fn organize_file(
 }
 
 #[tauri::command]
-fn get_desktop_summary() -> serde_json::Value {
+async fn get_desktop_summary() -> serde_json::Value {
     FileManager::scan_desktop_summary()
 }
 
 #[tauri::command]
-fn get_desktop_files() -> Vec<serde_json::Value> {
+async fn get_desktop_files() -> Vec<serde_json::Value> {
     FileManager::scan_desktop_files()
 }
 
 #[tauri::command]
-fn clean_desktop(workspace_dir: String, inbox_name: String) -> Result<(i32, Vec<String>), String> {
+async fn clean_desktop(workspace_dir: String, inbox_name: String) -> Result<(i32, Vec<String>), String> {
     let db = DatabaseManager::new(&workspace_dir);
     FileManager::clean_desktop_to_inbox(&workspace_dir, &inbox_name, &db)
 }
 
 #[tauri::command]
-fn get_tag_distribution(workspace_dir: String) -> Result<HashMap<String, i32>, String> {
+async fn get_tag_distribution(workspace_dir: String) -> Result<HashMap<String, i32>, String> {
     let db = DatabaseManager::new(&workspace_dir);
     db.get_tag_distribution().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn get_recent_files(workspace_dir: String, days: i64) -> Result<Vec<FileRecord>, String> {
+async fn get_recent_files(workspace_dir: String, days: i64) -> Result<Vec<FileRecord>, String> {
     let db = DatabaseManager::new(&workspace_dir);
     db.get_recent_files(days).map_err(|e| e.to_string())
 }
@@ -159,13 +164,13 @@ fn recommend_tags(filename: String, remark: String, active_tags: Vec<String>, to
 }
 
 #[tauri::command]
-fn perform_backup(backup_type: String, workspace_dir: String, dest_dir: String) -> Result<String, String> {
+async fn perform_backup(backup_type: String, workspace_dir: String, dest_dir: String) -> Result<String, String> {
     let db = DatabaseManager::new(&workspace_dir);
     BackupManager::perform_backup(&backup_type, &workspace_dir, &dest_dir, &db)
 }
 
 #[tauri::command]
-fn get_backup_history(workspace_dir: String, limit: i32) -> Result<Vec<BackupHistoryRecord>, String> {
+async fn get_backup_history(workspace_dir: String, limit: i32) -> Result<Vec<BackupHistoryRecord>, String> {
     let db = DatabaseManager::new(&workspace_dir);
     db.get_backup_history(limit).map_err(|e| e.to_string())
 }
@@ -214,7 +219,7 @@ fn suggest_rule_target(filename: String, auto_rules: Vec<serde_json::Value>, sta
 }
 
 #[tauri::command]
-fn load_config() -> config_manager::AppConfig {
+async fn load_config() -> config_manager::AppConfig {
     config_manager::ConfigManager::load_config()
 }
 
@@ -232,8 +237,8 @@ struct PathValidation {
 }
 
 #[tauri::command]
-fn validate_path(path: String, should_exist: bool, require_writable: bool) -> PathValidation {
-    let trimmed = path.trim();
+async fn validate_path(path: String, should_exist: bool, require_writable: bool) -> PathValidation {
+    let trimmed = path.trim().to_string();
     if trimmed.is_empty() {
         return PathValidation {
             exists: false,
@@ -243,54 +248,78 @@ fn validate_path(path: String, should_exist: bool, require_writable: bool) -> Pa
         };
     }
 
-    let path_ref = Path::new(trimmed);
-    let exists = path_ref.exists();
-    let is_dir = path_ref.is_dir();
-
-    if should_exist && !exists {
+    // 快速剪枝：如果输入是不完整的 Windows 网络路径，避免调用 exists() 导致系统 DNS/网络查询挂起数秒
+    if (trimmed.starts_with(r"\\") && trimmed.len() < 5) || trimmed == r"\" || trimmed == r"/" {
         return PathValidation {
-            exists,
-            is_dir,
+            exists: false,
+            is_dir: false,
             writable: false,
-            message: "路径不存在，请检查拼写或先创建目录".to_string(),
+            message: "网络共享或目录路径不完整".to_string(),
         };
     }
 
-    if exists && !is_dir {
-        return PathValidation {
-            exists,
-            is_dir,
-            writable: false,
-            message: "该路径不是文件夹".to_string(),
-        };
-    }
+    // 将存在同步阻塞风险的文件操作移动到专门的阻塞线程池中
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        let path_ref = Path::new(&trimmed);
+        let exists = path_ref.exists();
+        let is_dir = path_ref.is_dir();
 
-    let writable = if require_writable && exists && is_dir {
-        let probe = path_ref.join(".ledger_write_probe.tmp");
-        match fs::File::create(&probe).and_then(|mut file| file.write_all(b"ok")) {
-            Ok(_) => {
-                let _ = fs::remove_file(probe);
-                true
-            }
-            Err(_) => false,
+        if should_exist && !exists {
+            return PathValidation {
+                exists,
+                is_dir,
+                writable: false,
+                message: "路径不存在，请检查拼写或先创建目录".to_string(),
+            };
         }
-    } else {
-        !require_writable || !exists
-    };
 
-    let message = if require_writable && exists && is_dir && !writable {
-        "目录存在，但当前没有写入权限".to_string()
-    } else if exists && is_dir {
-        "路径可用".to_string()
-    } else {
-        "路径尚未创建，保存后初始化流程会尝试创建".to_string()
-    };
+        if exists && !is_dir {
+            return PathValidation {
+                exists,
+                is_dir,
+                writable: false,
+                message: "该路径不是文件夹".to_string(),
+            };
+        }
 
-    PathValidation {
-        exists,
-        is_dir,
-        writable,
-        message,
+        let writable = if require_writable && exists && is_dir {
+            let probe = path_ref.join(".ledger_write_probe.tmp");
+            match fs::File::create(&probe).and_then(|mut file| file.write_all(b"ok")) {
+                Ok(_) => {
+                    let _ = fs::remove_file(probe);
+                    true
+                }
+                Err(_) => false,
+            }
+        } else {
+            !require_writable || !exists
+        };
+
+        let message = if require_writable && exists && is_dir && !writable {
+            "目录存在，但当前没有写入权限".to_string()
+        } else if exists && is_dir {
+            "路径可用".to_string()
+        } else {
+            "路径尚未创建，保存后初始化流程会尝试创建".to_string()
+        };
+
+        PathValidation {
+            exists,
+            is_dir,
+            writable,
+            message,
+        }
+    })
+    .await;
+
+    match res {
+        Ok(v) => v,
+        Err(_) => PathValidation {
+            exists: false,
+            is_dir: false,
+            writable: false,
+            message: "路径校验任务超时或异常".to_string(),
+        },
     }
 }
 
@@ -380,43 +409,60 @@ fn open_in_system(workspace_dir: String, filepath: String) -> Result<(), String>
 }
 
 #[tauri::command]
-fn select_directory() -> Result<String, String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::process::Command;
-        let script = r#"
-            Add-Type -AssemblyName System.Windows.Forms;
-            $f = New-Object System.Windows.Forms.FolderBrowserDialog;
-            $f.Description = '请选择目标备份或工作空间目录';
-            $f.ShowNewFolderButton = $true;
-            if ($f.ShowDialog() -eq 'OK') {
-                Write-Output $f.SelectedPath
-            }
-        "#;
-        
-        let output = Command::new("powershell")
-            .arg("-NoProfile")
-            .arg("-Command")
-            .arg(script)
-            .output()
-            .map_err(|e| e.to_string())?;
-            
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if path.is_empty() {
-                Err("USER_CANCELLED".to_string())
-            } else {
-                Ok(path)
-            }
-        } else {
-            let err_msg = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            Err(format!("目录选择失败: {}", err_msg))
-        }
+async fn select_directory() -> Result<String, String> {
+    let folder = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("请选择目标备份或工作空间目录")
+            .pick_folder()
+    })
+    .await
+    .map_err(|e| format!("启动文件对话框失败: {}", e))?;
+
+    match folder {
+        Some(path_buf) => Ok(path_buf.to_string_lossy().into_owned()),
+        None => Err("USER_CANCELLED".to_string()),
     }
-    
-    #[cfg(not(target_os = "windows"))]
-    {
-        Err("该平台暂不支持原生目录选择器".to_string())
+}
+
+#[tauri::command]
+async fn select_import_config_file() -> Result<String, String> {
+    let file = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("选择导入的配置文件 (.json)")
+            .add_filter("JSON 配置", &["json"])
+            .pick_file()
+    })
+    .await
+    .map_err(|e| format!("启动文件对话框失败: {}", e))?;
+
+    match file {
+        Some(path_buf) => {
+            fs::read_to_string(path_buf)
+                .map_err(|e| format!("读取文件失败: {}", e))
+        }
+        None => Err("USER_CANCELLED".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn select_export_config_file(config_json: String) -> Result<(), String> {
+    let file = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("导出配置文件为...")
+            .add_filter("JSON 配置", &["json"])
+            .set_file_name("ledger-pro-max-config.json")
+            .save_file()
+    })
+    .await
+    .map_err(|e| format!("启动文件对话框失败: {}", e))?;
+
+    match file {
+        Some(path_buf) => {
+            fs::write(path_buf, config_json)
+                .map_err(|e| format!("保存文件失败: {}", e))?;
+            Ok(())
+        }
+        None => Err("USER_CANCELLED".to_string()),
     }
 }
 
@@ -486,6 +532,7 @@ pub fn run() {
             init_workspace,
             init_project,
             create_folder,
+            create_file,
             scan_workspace,
             search_files,
             update_file_tags,
@@ -512,7 +559,9 @@ pub fn run() {
             find_duplicates,
             open_in_system,
             select_directory,
-            read_docx_text
+            read_docx_text,
+            select_import_config_file,
+            select_export_config_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

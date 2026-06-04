@@ -56,7 +56,7 @@ impl Default for AppConfig {
             monitored_dirs: vec![downloads],
             backup_disk_dir: String::new(),
             backup_cloud_dir: String::new(),
-            theme: "dark".to_string(),
+            theme: "light".to_string(),
             monitored_downloads: true,
             auto_rule_enabled: false,
             tags: TagGroups {

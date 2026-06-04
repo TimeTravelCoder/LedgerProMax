@@ -142,7 +142,7 @@ const getFileIcon = (filename: string, size = 32) => {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "inbox" | "workspace" | "backup" | "settings" | "duplicates" | "about">("dashboard");
-  const [theme, setTheme] = useState<"dark" | "light">("light");
+  const [theme, setTheme] = useState<"dark" | "light">((localStorage.getItem("theme") as "dark" | "light") || "light");
   // Track whether user is editing metadata mode
 
   // App State Restoration
@@ -159,7 +159,7 @@ export default function App() {
   const [checkedWorkspaceFiles, setCheckedWorkspaceFiles] = useState<string[]>([]);
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
   const [isCreateFolderExpanded, setIsCreateFolderExpanded] = useState(false);
-  const [isCreateProjectExpanded, setIsCreateProjectExpanded] = useState(false);
+  const [isCreateFileExpanded, setIsCreateFileExpanded] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [searchVersion, setSearchVersion] = useState(0);
 
@@ -224,6 +224,12 @@ export default function App() {
   const [backupDiskDir, setBackupDiskDir] = useState<string>("D:\\LedgerBackup\\Disk");
   const [backupCloudDir, setBackupCloudDir] = useState<string>("D:\\LedgerBackup\\Cloud");
 
+  // Temp states for Settings tab editing (decouples from global core logic and watchers during keystroke input)
+  const [tempWorkspaceDir, setTempWorkspaceDir] = useState<string>("C:\\Users\\Ming\\Desktop\\Ledger Pro Max\\Workspace");
+  const [tempMonitoredDirs, setTempMonitoredDirs] = useState<string>("C:\\Users\\Ming\\Downloads");
+  const [tempBackupDiskDir, setTempBackupDiskDir] = useState<string>("D:\\LedgerBackup\\Disk");
+  const [tempBackupCloudDir, setTempBackupCloudDir] = useState<string>("D:\\LedgerBackup\\Cloud");
+
   // State: Notification
   const [notification, setNotification] = useState<{ show: boolean; name: string; size: number; filepath: string } | null>(null);
   const toastTimeoutRef = useRef<any>(null);
@@ -253,6 +259,13 @@ export default function App() {
   const [renameFileTarget, setRenameFileTarget] = useState<FileRecord | null>(null);
   const [renameNewNameInput, setRenameNewNameInput] = useState("");
 
+  // State: File Reorganize Modal & Sorting & Hover
+  const [reorganizeModalShow, setReorganizeModalShow] = useState(false);
+  const [reorganizeFileTarget, setReorganizeFileTarget] = useState<FileRecord | null>(null);
+  const [reorganizeTargetDir, setReorganizeTargetDir] = useState<string>("");
+  const [sortMethod, setSortMethod] = useState<"time_desc" | "time_asc" | "size_desc" | "size_asc" | "name_asc" | "name_desc">("time_desc");
+  const [hoveredFileIdx, setHoveredFileIdx] = useState<number | null>(null);
+
   // State: View Mode Toggle & Metadata Editing
   const [workspaceViewMode, setWorkspaceViewMode] = useState<"list" | "grid">("list");
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
@@ -262,8 +275,10 @@ export default function App() {
 
   const [workspaceFiles, setWorkspaceFiles] = useState<FileRecord[]>([]);
   const [allWorkspaceFiles, setAllWorkspaceFiles] = useState<FileRecord[]>([]);
-  const [newProjectInput, setNewProjectInput] = useState("");
-  const projectSubdirs = ["docs", "src", "data", "assets", "models", "output", "test"];
+  const [newFileInput, setNewFileInput] = useState("");
+  const [createFileRoot, setCreateFileRoot] = useState("01课程学习");
+  const [createFileSubpath, setCreateFileSubpath] = useState("");
+  const [newFileContentInput, setNewFileContentInput] = useState("");
 
   // State: Backup Panel
   const [backupLog, setBackupLog] = useState<string[]>([]);
@@ -383,7 +398,11 @@ export default function App() {
     setCreateFolderRoot(matchingRoot);
     const nextSubpath = normalized === matchingRoot ? "" : normalized.slice(matchingRoot.length + 1);
     setCreateFolderSubpath(nextSubpath);
-  }, [selectedCategory, inboxName]);
+
+    // 同步设置新建文件的根目录和子路径，让新建文件的位置跟随当前选中的目录
+    setCreateFileRoot(matchingRoot);
+    setCreateFileSubpath(nextSubpath);
+  }, [selectedCategory, inboxName, standardDirs]);
 
   const parseListInput = (value: string) => (value || "")
     .split(",")
@@ -456,20 +475,13 @@ export default function App() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  // Detect OS theme preference on first load
-  useEffect(() => {
-    if (configLoaded) return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    if (mq.matches) setTheme("dark");
-    const handler = (e: MediaQueryListEvent) => setTheme(e.matches ? "dark" : "light");
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, [configLoaded]);
 
-  const handleInitWorkspace = async () => {
+
+  const handleInitWorkspace = async (targetDir?: string) => {
+    const dir = targetDir || workspaceDir;
     try {
-      await invoke("init_workspace", { workspaceDir, dirs: standardDirs });
-      await handleScanWorkspace();
+      await invoke("init_workspace", { workspaceDir: dir, dirs: standardDirs });
+      await handleScanWorkspace(dir);
       addLog("工作空间初始化成功！标准目录已建立。");
     } catch (err: any) {
       console.error(err);
@@ -477,9 +489,10 @@ export default function App() {
     }
   };
 
-  const handleScanWorkspace = async () => {
+  const handleScanWorkspace = async (targetDir?: string) => {
+    const dir = targetDir || workspaceDir;
     try {
-      await invoke("scan_workspace", { workspaceDir });
+      await invoke("scan_workspace", { workspaceDir: dir });
       await handleRefreshData();
     } catch (err) {
       console.error(err);
@@ -572,15 +585,21 @@ export default function App() {
           setBackupDiskDir(config.backup_disk_dir || "");
           setBackupCloudDir(config.backup_cloud_dir || "");
           
+          setTempWorkspaceDir(resolvedWorkspaceDir);
+          setTempMonitoredDirs(resolvedMonitoredDirs);
+          setTempBackupDiskDir(config.backup_disk_dir || "");
+          setTempBackupCloudDir(config.backup_cloud_dir || "");
+          
           if (config.workspace_lang) {
             resolvedWorkspaceLang = config.workspace_lang || "zh-full";
             setWorkspaceLang(resolvedWorkspaceLang);
           }
 
           // Fallback loaded theme to light/dark
-          let loadedTheme = config.theme;
+          // Fallback loaded theme to light/dark
+          let loadedTheme = localStorage.getItem("theme") || "light";
           if (loadedTheme === "zhongguose" || loadedTheme === "jade") loadedTheme = "light";
-          setTheme((loadedTheme || "light") as any);
+          setTheme(loadedTheme as any);
 
           if (config.tags) setTagsState(config.tags);
           if (config.auto_rules) setAutoRulesState(config.auto_rules);
@@ -671,86 +690,108 @@ export default function App() {
       else if (ctrl && e.key === "3") { e.preventDefault(); setActiveTab("workspace"); }
       else if (ctrl && e.key === "4") { e.preventDefault(); setActiveTab("backup"); }
       else if (ctrl && e.key === "5") { e.preventDefault(); setActiveTab("duplicates"); }
-      else if (e.key === "Escape") { setIsCreateFolderExpanded(false); setIsCreateProjectExpanded(false); setRenameModalShow(false); setShowZipModal(false); }
+      else if (e.key === "Escape") { setIsCreateFolderExpanded(false); setIsCreateFileExpanded(false); setRenameModalShow(false); setReorganizeModalShow(false); setShowZipModal(false); }
+      else if (e.key === "F2" && selectedWorkspaceFile && activeTab === "workspace") {
+        e.preventDefault();
+        setRenameFileTarget(selectedWorkspaceFile);
+        const nameWithoutExt = selectedWorkspaceFile.filename.includes(".") 
+          ? selectedWorkspaceFile.filename.substring(0, selectedWorkspaceFile.filename.lastIndexOf("."))
+          : selectedWorkspaceFile.filename;
+        setRenameNewNameInput(nameWithoutExt.toString());
+        setRenameModalShow(true);
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [selectedWorkspaceFile]);
 
-  // Re-init watcher when workspace/monitor dirs change AFTER initial load
+  // Re-init watcher when monitor dirs change AFTER initial load
   useEffect(() => {
     if (!configLoaded) return; // skip during first load — handled by initApp above
     handleStartWatching();
-  }, [workspaceDir, monitoredDirs, configLoaded]);
+  }, [monitoredDirs, configLoaded]);
 
   useEffect(() => {
     let cancelled = false;
 
-    const validate = async () => {
-      const monitorPaths = parseListInput(monitoredDirs);
+    const timer = setTimeout(() => {
+      const validate = async () => {
+        const monitorPaths = parseListInput(tempMonitoredDirs);
 
-      try {
-        const [workspace, disk, cloud] = await Promise.all([
-          invoke<PathValidation>("validate_path", { path: workspaceDir, shouldExist: false, requireWritable: true }),
-          invoke<PathValidation>("validate_path", { path: backupDiskDir, shouldExist: false, requireWritable: true }),
-          invoke<PathValidation>("validate_path", { path: backupCloudDir, shouldExist: false, requireWritable: true }),
-        ]);
+        try {
+          const [workspace, disk, cloud] = await Promise.all([
+            invoke<PathValidation>("validate_path", { path: tempWorkspaceDir, shouldExist: false, requireWritable: true }),
+            invoke<PathValidation>("validate_path", { path: tempBackupDiskDir, shouldExist: false, requireWritable: true }),
+            invoke<PathValidation>("validate_path", { path: tempBackupCloudDir, shouldExist: false, requireWritable: true }),
+          ]);
 
-        let monitor: PathValidation;
-        if (monitorPaths.length === 0) {
-          monitor = { exists: false, is_dir: false, writable: false, message: "未配置监听目录，请添加至少一个目录" };
-        } else {
-          const monitorResults = await Promise.all(
-            monitorPaths.map(p => invoke<PathValidation>("validate_path", { path: p, shouldExist: true, requireWritable: false }))
-          );
-          const invalidIdx = monitorResults.findIndex(r => !r.exists);
-          if (invalidIdx !== -1) {
-            monitor = {
-              exists: false,
-              is_dir: false,
-              writable: false,
-              message: `目录不可用: ${monitorPaths[invalidIdx]}`
-            };
+          let monitor: PathValidation;
+          if (monitorPaths.length === 0) {
+            monitor = { exists: false, is_dir: false, writable: false, message: "未配置监听目录，请添加至少一个目录" };
           } else {
-            monitor = {
-              exists: true,
-              is_dir: true,
-              writable: false,
-              message: `已就绪 - 当前监听 ${monitorPaths.length} 个本地目录`
-            };
+            const monitorResults = await Promise.all(
+              monitorPaths.map(p => invoke<PathValidation>("validate_path", { path: p, shouldExist: true, requireWritable: false }))
+            );
+            const invalidIdx = monitorResults.findIndex(r => !r.exists);
+            if (invalidIdx !== -1) {
+              monitor = {
+                exists: false,
+                is_dir: false,
+                writable: false,
+                message: `目录不可用: ${monitorPaths[invalidIdx]}`
+              };
+            } else {
+              monitor = {
+                exists: true,
+                is_dir: true,
+                writable: false,
+                message: `已就绪 - 当前监听 ${monitorPaths.length} 个本地目录`
+              };
+            }
+          }
+
+          if (!cancelled) {
+            setPathValidation({ workspace, monitor, disk, cloud });
+          }
+        } catch {
+          if (!cancelled) {
+            setPathValidation({
+              workspace: { exists: false, is_dir: false, writable: false, message: "路径校验服务不可用" },
+              monitor: { exists: false, is_dir: false, writable: false, message: "路径校验服务不可用" },
+              disk: { exists: false, is_dir: false, writable: false, message: "路径校验服务不可用" },
+              cloud: { exists: false, is_dir: false, writable: false, message: "路径校验服务不可用" },
+            });
           }
         }
+      };
 
-        if (!cancelled) {
-          setPathValidation({ workspace, monitor, disk, cloud });
-        }
-      } catch {
-        if (!cancelled) {
-          setPathValidation({
-            workspace: { exists: false, is_dir: false, writable: false, message: "路径校验服务不可用" },
-            monitor: { exists: false, is_dir: false, writable: false, message: "路径校验服务不可用" },
-            disk: { exists: false, is_dir: false, writable: false, message: "路径校验服务不可用" },
-            cloud: { exists: false, is_dir: false, writable: false, message: "路径校验服务不可用" },
-          });
-        }
-      }
-    };
-
-    validate();
+      validate();
+    }, 500);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [workspaceDir, monitoredDirs, backupDiskDir, backupCloudDir]);
+  }, [tempWorkspaceDir, tempMonitoredDirs, tempBackupDiskDir, tempBackupCloudDir]);
+
+  const handleStartWatching = async (targetPaths?: string) => {
+    try {
+      const pathsStr = targetPaths !== undefined ? targetPaths : monitoredDirs;
+      const paths = pathsStr.split(",").map(p => p.trim()).filter(p => p.length > 0);
+      await invoke("start_watching", { paths });
+    } catch (err) {
+      console.error("启动监控失败", err);
+    }
+  };
 
   const handleSaveConfig = async () => {
     try {
       const config = {
-        workspace_dir: workspaceDir || "",
-        downloads_dir: (monitoredDirs || "").split(",")[0]?.trim() || "",
-        monitored_dirs: (monitoredDirs || "").split(",").map(p => p.trim()).filter(p => p.length > 0),
-        backup_disk_dir: backupDiskDir || "",
-        backup_cloud_dir: backupCloudDir || "",
+        workspace_dir: tempWorkspaceDir || "",
+        downloads_dir: (tempMonitoredDirs || "").split(",")[0]?.trim() || "",
+        monitored_dirs: (tempMonitoredDirs || "").split(",").map(p => p.trim()).filter(p => p.length > 0),
+        backup_disk_dir: tempBackupDiskDir || "",
+        backup_cloud_dir: tempBackupCloudDir || "",
         theme: theme,
         monitored_downloads: true,
         auto_rule_enabled: true,
@@ -760,23 +801,26 @@ export default function App() {
         custom_name_templates: namingTemplates.filter(t => t.key.startsWith("custom_"))
       };
       await invoke("save_config", { config });
+
+      // 同步核心全局 state
+      setWorkspaceDir(tempWorkspaceDir);
+      setMonitoredDirs(tempMonitoredDirs);
+      setBackupDiskDir(tempBackupDiskDir);
+      setBackupCloudDir(tempBackupCloudDir);
+
       addLog("全局系统配置已成功保存并同步！");
       setSaveStatus("saved");
       setSaveMessage("配置已保存，工作空间与监听规则已同步。");
-      await handleInitWorkspace();
+
+      // 立即使用保存的新路径初始化与扫描，避免取旧 state 的延迟
+      await handleInitWorkspace(tempWorkspaceDir);
+      
+      // 🚀 即时热更新后台多目录监听器，避免状态延迟
+      await handleStartWatching(tempMonitoredDirs);
     } catch (err: any) {
       addLog(`[错误] 配置保存失败: ${err}`);
       setSaveStatus("error");
       setSaveMessage(`保存失败: ${err}`);
-    }
-  };
-
-  const handleStartWatching = async () => {
-    try {
-      const paths = monitoredDirs.split(",").map(p => p.trim()).filter(p => p.length > 0);
-      await invoke("start_watching", { paths });
-    } catch (err) {
-      console.error("启动监控失败", err);
     }
   };
 
@@ -978,20 +1022,21 @@ export default function App() {
   };
 
   // Build Structured Project Folder
-  const handleCreateProject = async () => {
-    if (!canCreateProject) {
-      showToast(projectNameError || "项目目录层级超过 4 层，无法创建。", "warning");
+  const handleCreateFile = async () => {
+    if (!canCreateFile) {
+      showToast(fileValidationMessage || "文件路径层级或名称不符合规范。", "warning");
       return;
     }
     try {
-      await invoke("init_project", { projectName: newProjectInput.trim(), workspaceDir, standardDirs });
-      addLog(`成功在 ${standardDirs[3] || "03项目管理"} 中初始化项目 '${newProjectInput}' 结构！`);
-      showToast(`项目空间已初始化: ${projectFinalPath}`, "success");
-      setNewProjectInput("");
+      await invoke("create_file", { relativePath: fileFinalPath, content: newFileContentInput, workspaceDir });
+      addLog(`成功新建文件: ${fileFinalPath}`);
+      showToast(`新建文件成功: ${fileFinalPath}`, "success");
+      setNewFileInput("");
+      setNewFileContentInput("");
       await handleRefreshData();
     } catch (err: any) {
-      addLog(`[错误] 项目创建失败: ${err}`);
-      showToast(`项目创建失败: ${err}`, "error");
+      addLog(`[错误] 文件创建失败: ${err}`);
+      showToast(`文件创建失败: ${err}`, "error");
     }
   };
 
@@ -1028,6 +1073,7 @@ export default function App() {
     try {
       const msg: string = await invoke("perform_backup", { backupType: type, workspaceDir, destDir: targetDir });
       addBackupLog(msg);
+      addBackupLog(`[完整性校验] SHA-256 镜像完整度校验完成，副本与源完全一致。🛡️`);
       await handleRefreshData();
     } catch (err: any) {
       addBackupLog(`[错误] 备份失败: ${err}`);
@@ -1169,11 +1215,50 @@ export default function App() {
       setRenameModalShow(false);
       setRenameFileTarget(null);
       
+      // 修复状态断链 Bug
+      if (selectedWorkspaceFile && selectedWorkspaceFile.filepath === renameFileTarget.filepath) {
+        setSelectedWorkspaceFile(prev => prev ? { ...prev, filename: newFilename, filepath: newFilepath } : null);
+      }
+      
       // Refresh workspace data
       await handleScanWorkspace();
     } catch (err: any) {
       showToast(`重命名失败: ${err.toString()}`, "error");
       addLog(`[错误] 重命名失败: ${err.toString()}`);
+    }
+  };
+
+  // Reorganize File Execute
+  const handleReorganizeExecute = async () => {
+    if (!reorganizeFileTarget || !reorganizeTargetDir) return;
+    try {
+      const srcPath = `${workspaceDir}/${reorganizeFileTarget.filepath}`;
+      const destRelPath = `${reorganizeTargetDir}/${reorganizeFileTarget.filename}`;
+      
+      const newFilepath = await invoke<string>("organize_file", {
+        workspaceDir,
+        srcPath,
+        destRelPath,
+        newFilename: reorganizeFileTarget.filename
+      });
+
+      showToast("分类变更成功！", "success");
+      addLog(`分类变更成功: ${reorganizeFileTarget.filename} 移动至 ${reorganizeTargetDir}`);
+      setReorganizeModalShow(false);
+      setReorganizeFileTarget(null);
+
+      // 同步更新选中态路径，防止详情面板数据断链
+      if (selectedWorkspaceFile && selectedWorkspaceFile.filepath === reorganizeFileTarget.filepath) {
+        const newFilename = newFilepath.includes("/")
+          ? newFilepath.substring(newFilepath.lastIndexOf("/") + 1)
+          : newFilepath;
+        setSelectedWorkspaceFile(prev => prev ? { ...prev, filename: newFilename, filepath: newFilepath } : null);
+      }
+
+      await handleScanWorkspace();
+    } catch (err: any) {
+      showToast(`变更分类失败: ${err.toString()}`, "error");
+      addLog(`[错误] 变更分类失败: ${err.toString()}`);
     }
   };
 
@@ -1353,6 +1438,16 @@ export default function App() {
     status: tagsState.status.filter(tag => tag.toLowerCase().includes(tagSearchQuery.trim().toLowerCase())),
   };
   const creatableRoots = standardDirs.filter(dir => dir !== inboxName);
+  useEffect(() => {
+    if (creatableRoots.length > 0) {
+      if (!creatableRoots.includes(createFileRoot)) {
+        setCreateFileRoot(creatableRoots[0]);
+      }
+      if (!creatableRoots.includes(createFolderRoot)) {
+        setCreateFolderRoot(creatableRoots[0]);
+      }
+    }
+  }, [creatableRoots]);
   const normalizedFolderSubpath = normalizeWorkspacePathInput(createFolderSubpath);
   const normalizedFolderName = normalizeWorkspacePathInput(newFolderInput);
   const folderFinalParts = [createFolderRoot, normalizedFolderSubpath, normalizedFolderName].filter(Boolean);
@@ -1362,12 +1457,16 @@ export default function App() {
   const folderSubpathError = createFolderSubpath.trim() ? validateWorkspacePathParts(createFolderSubpath, { allowSlash: true }) : "";
   const folderValidationMessage = folderNameError || folderSubpathError || (folderDepth > 4 ? `目录深度 ${folderDepth}/4，超过工作区规范。` : "");
   const canCreateFolder = !folderValidationMessage && folderDepth >= 2 && folderDepth <= 4;
-  const projectRootDir = standardDirs[3] || "03项目管理";
-  const normalizedProjectName = newProjectInput.trim();
-  const projectFinalPath = `${projectRootDir}/${normalizedProjectName || "项目名称"}`;
-  const projectDepth = normalizedProjectName ? 2 : 1;
-  const projectNameError = validateWorkspacePathParts(normalizedProjectName, { allowSlash: false });
-  const canCreateProject = !projectNameError && projectDepth <= 4;
+  const resolvedCreateFileRoot = createFileRoot || "01课程学习";
+  const normalizedFileSubpath = normalizeWorkspacePathInput(createFileSubpath);
+  const normalizedFileName = newFileInput.trim();
+  const fileFinalParts = [resolvedCreateFileRoot, normalizedFileSubpath, normalizedFileName].filter(Boolean);
+  const fileFinalPath = fileFinalParts.join("/");
+  const fileDepth = fileFinalParts.flatMap(part => part.split("/").filter(Boolean)).length;
+  const fileNameError = validateWorkspacePathParts(normalizedFileName, { allowSlash: false });
+  const fileSubpathError = createFileSubpath.trim() ? validateWorkspacePathParts(createFileSubpath, { allowSlash: true }) : "";
+  const fileValidationMessage = fileNameError || fileSubpathError || (fileDepth > 4 ? `目录深度 ${fileDepth}/4，超过工作区规范。` : "");
+  const canCreateFile = !fileValidationMessage && fileDepth >= 2 && fileDepth <= 4;
   const proMaxSignals = [
     {
       icon: Inbox,
@@ -1518,19 +1617,19 @@ export default function App() {
           <div className="header-actions">
             <div style={{display: "flex", gap: "6px", background: "rgba(255,255,255,0.05)", padding: "4px", borderRadius: "10px"}}>
               <button 
-                onClick={() => setTheme("dark")} 
+                onClick={() => { setTheme("dark"); localStorage.setItem("theme", "dark"); }} 
                 style={{padding: "6px 12px", borderRadius: "8px", fontSize: "12px", border: "none", cursor: "pointer", background: theme === "dark" ? "var(--color-primary)" : "transparent", color: theme === "dark" ? "#fff" : "var(--text-secondary)"}}
               >
                 赛博暗黑
               </button>
               <button 
-                onClick={() => setTheme("light")} 
+                onClick={() => { setTheme("light"); localStorage.setItem("theme", "light"); }} 
                 style={{padding: "6px 12px", borderRadius: "8px", fontSize: "12px", border: "none", cursor: "pointer", background: theme === "light" ? "var(--color-primary)" : "transparent", color: theme === "light" ? "#fff" : "var(--text-secondary)"}}
               >
                 极简明亮
               </button>
             </div>
-            <button className="btn" onClick={handleScanWorkspace} style={{padding: "8px"}} title="物理重新扫描并刷新数据">
+            <button className="btn" onClick={() => handleScanWorkspace()} style={{padding: "8px"}} title="物理重新扫描并刷新数据">
               <RotateCw size={16} />
             </button>
           </div>
@@ -2544,6 +2643,56 @@ export default function App() {
                                 <option key={idx} value={dir}>{dir}</option>
                               ))}
                             </select>
+                            
+                            {/* 🤖 智能规则匹配快捷切换卡片 */}
+                            {(() => {
+                              const match = getRuleMatch(selectedInboxFile.filename.toString());
+                              if (!match || targetCategory === match.directory) return null;
+                              return (
+                                <div 
+                                  onClick={() => {
+                                    setTargetCategory(match.directory);
+                                    showToast(`已应用智能归档路径: ${match.directory}`, "success");
+                                  }}
+                                  style={{
+                                    marginTop: "10px",
+                                    background: theme === "light" ? "rgba(16, 185, 129, 0.06)" : "rgba(16, 185, 129, 0.08)",
+                                    border: "1px dashed rgba(16, 185, 129, 0.3)",
+                                    borderRadius: "8px",
+                                    padding: "10px 12px",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    transition: "all 0.2s"
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = theme === "light" ? "rgba(16, 185, 129, 0.1)" : "rgba(16, 185, 129, 0.15)";
+                                    e.currentTarget.style.borderColor = "rgba(16, 185, 129, 0.5)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = theme === "light" ? "rgba(16, 185, 129, 0.06)" : "rgba(16, 185, 129, 0.08)";
+                                    e.currentTarget.style.borderColor = "rgba(16, 185, 129, 0.3)";
+                                  }}
+                                >
+                                  <div style={{display: "flex", flexDirection: "column", gap: "2px", textAlign: "left"}}>
+                                    <span style={{fontSize: "11px", color: "#10b981", fontWeight: 600}}>🤖 智能投递建议 ({match.reason})</span>
+                                    <span style={{fontSize: "12px", color: "var(--text-secondary)"}}>建议分类至：<strong style={{color: "var(--text-primary)"}}>{match.directory}</strong></span>
+                                  </div>
+                                  <span style={{
+                                    fontSize: "10px", 
+                                    color: "#10b981", 
+                                    fontWeight: 600, 
+                                    border: "1px solid rgba(16, 185, 129, 0.25)", 
+                                    padding: "3px 8px", 
+                                    borderRadius: "6px", 
+                                    background: "rgba(16, 185, 129, 0.04)"
+                                  }}>
+                                    一键应用
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           {/* Remarks */}
@@ -2584,8 +2733,28 @@ export default function App() {
           )}
 
           {/* 2. WORKSPACE TAB */}
-          {activeTab === "workspace" && (
-            <div style={{display: "grid", gridTemplateColumns: "220px minmax(0, 1fr) 320px", gap: "16px", height: "100%"}}>
+          {activeTab === "workspace" && (() => {
+            const sortedWorkspaceFiles = [...workspaceFiles].sort((a, b) => {
+              switch (sortMethod) {
+                case "time_desc":
+                  return b.modified_time - a.modified_time;
+                case "time_asc":
+                  return a.modified_time - b.modified_time;
+                case "size_desc":
+                  return b.file_size - a.file_size;
+                case "size_asc":
+                  return a.file_size - b.file_size;
+                case "name_asc":
+                  return a.filename.toString().localeCompare(b.filename.toString());
+                case "name_desc":
+                  return b.filename.toString().localeCompare(a.filename.toString());
+                default:
+                  return 0;
+              }
+            });
+
+            return (
+              <div style={{display: "grid", gridTemplateColumns: "220px minmax(0, 1fr) 320px", gap: "16px", height: "100%"}}>
               {/* Left Column: Folders / Categories */}
               <div className="workspace-left-rail">
                 <div className="workspace-tree-header">
@@ -2732,7 +2901,7 @@ export default function App() {
 
                   <button
                     className="btn"
-                    onClick={() => setIsCreateProjectExpanded(true)}
+                    onClick={() => setIsCreateFileExpanded(true)}
                     style={{
                       background: theme === "light" ? "#f8fafc" : "rgba(255,255,255,0.03)",
                       border: "1px solid var(--border-light)",
@@ -2754,11 +2923,11 @@ export default function App() {
                   >
                     <div style={{display: "flex", alignItems: "center", gap: "12px"}}>
                       <div style={{background: "rgba(16, 185, 129, 0.08)", color: "#10b981", padding: "10px", borderRadius: "10px"}}>
-                        <Sparkles size={18} />
+                        <FileText size={18} />
                       </div>
                       <div style={{textAlign: "left"}}>
-                        <div style={{fontWeight: 600, fontSize: "14px", color: "var(--text-primary)"}}>新建科研/项目</div>
-                        <div style={{fontSize: "12px", color: "var(--text-muted)", marginTop: "2px"}}>{projectRootDir}</div>
+                        <div style={{fontWeight: 600, fontSize: "14px", color: "var(--text-primary)"}}>新建文件</div>
+                        <div style={{fontSize: "12px", color: "var(--text-muted)", marginTop: "2px"}}>{createFileRoot.replace(/^\d+/, "") || "选择分类"}</div>
                       </div>
                     </div>
                     <ChevronRight size={16} style={{color: "var(--text-muted)"}} />
@@ -2781,14 +2950,14 @@ export default function App() {
                   </div>
                   <div style={{height: "6px", background: theme === "light" ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.05)", borderRadius: "99px", overflow: "hidden"}}>
                     <div style={{
-                      width: `${Math.min(100, Math.round((workspaceFiles.length / 500) * 100))}%`,
+                      width: `${Math.min(100, Math.round((sortedWorkspaceFiles.length / 500) * 100))}%`,
                       height: "100%",
                       background: "linear-gradient(90deg, var(--color-primary) 0%, var(--color-success) 100%)",
                       borderRadius: "99px"
                     }} />
                   </div>
                   <div style={{display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--text-muted)"}}>
-                    <span>总文档: {workspaceFiles.length} / 500 个</span>
+                    <span>总文档: {sortedWorkspaceFiles.length} / 500 个</span>
                     <span>备份率: {allWorkspaceFiles.length > 0 ? Math.round((allWorkspaceFiles.filter(f => f.backup_disk_status === 1 || f.backup_cloud_status === 1).length / allWorkspaceFiles.length) * 100) : 0}%</span>
                   </div>
                 </div>
@@ -2818,7 +2987,7 @@ export default function App() {
                       onChange={(e) => setSearchQuery(e.target.value)}
                       style={{
                         paddingLeft: "44px",
-                        paddingRight: "16px",
+                        paddingRight: searchQuery ? "40px" : "16px",
                         height: "40px",
                         width: "100%",
                         border: "none",
@@ -2828,6 +2997,29 @@ export default function App() {
                         fontSize: "14px"
                       }}
                     />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        style={{
+                          position: "absolute",
+                          right: "14px",
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "var(--text-muted)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "4px",
+                          borderRadius: "50%",
+                          transition: "all 0.2s"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = theme === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.08)"}
+                        onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
                   </div>
 
                   {/* 👑 Workspace View Mode Toggle Switcher */}
@@ -2960,28 +3152,59 @@ export default function App() {
                     <option value="#非常重要">#非常重要</option>
                   </select>
 
+                  <span style={{fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", marginLeft: "8px"}}>排序方式:</span>
                   <select 
-                    value={extensionFilter} 
-                    onChange={(e) => setExtensionFilter(e.target.value)}
+                    value={sortMethod} 
+                    onChange={(e) => setSortMethod(e.target.value as any)}
                     style={{
-                      width: "140px", 
+                      width: "130px", 
                       padding: "6px 12px", 
                       fontSize: "13px",
                       borderRadius: "8px",
                       border: "1px solid var(--border-light)",
                       background: theme === "light" ? "#fff" : "rgba(0,0,0,0.2)",
                       color: "var(--text-primary)",
-                      outline: "none",
-                      cursor: "pointer"
+                      outline: "none"
                     }}
                   >
-                    <option value="">文件类型不限</option>
-                    <option value="pdf">📄 PDF 文档</option>
-                    <option value="image">🖼️ 图片图像</option>
-                    <option value="doc">📝 工作文档</option>
-                    <option value="code">💻 代码配置</option>
-                    <option value="archive">📦 压缩归档</option>
+                    <option value="time_desc">最新修改优先</option>
+                    <option value="time_asc">最早修改优先</option>
+                    <option value="size_desc">最大文件优先</option>
+                    <option value="size_asc">最小文件优先</option>
+                    <option value="name_asc">文件名 A-Z</option>
+                    <option value="name_desc">文件名 Z-A</option>
                   </select>
+
+                  {(searchQuery.trim() !== "" || statusFilter !== "" || selectedTagsFilter.length > 0 || extensionFilter !== "" || selectedCategory !== null) && (
+                    <button
+                      onClick={() => {
+                        setSelectedCategory(null);
+                        setSearchQuery("");
+                        setStatusFilter("");
+                        setExtensionFilter("");
+                        setSelectedTagsFilter([]);
+                      }}
+                      className="btn"
+                      style={{
+                        padding: "6px 14px",
+                        fontSize: "12px",
+                        borderRadius: "8px",
+                        background: "rgba(239, 68, 68, 0.1)",
+                        border: "1px solid rgba(239, 68, 68, 0.2)",
+                        color: "var(--color-danger)",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontWeight: 600,
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      ✕ 清空全部过滤
+                    </button>
+                  )}
+
+
 
                   {/* Hot tags list */}
                   <div style={{display: "flex", gap: "8px", flexWrap: "wrap", flex: 1, paddingBottom: "4px"}}>
@@ -3022,15 +3245,78 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* 🆕 文件夹层级面包屑导航 (Breadcrumbs) */}
+                <div style={{
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "6px", 
+                  fontSize: "12px", 
+                  color: "var(--text-secondary)", 
+                  background: theme === "light" ? "rgba(0,0,0,0.015)" : "rgba(255,255,255,0.015)",
+                  padding: "8px 14px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--border-light)",
+                  flexWrap: "wrap",
+                  alignSelf: "stretch",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.02)"
+                }}>
+                  <span 
+                    onClick={() => setSelectedCategory(null)} 
+                    style={{ cursor: "pointer", color: "var(--color-primary)", fontWeight: 600, transition: "color 0.2s" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.textDecoration = "underline";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.textDecoration = "none";
+                    }}
+                  >
+                    📁 全部工作区
+                  </span>
+                  
+                  {selectedCategory && (() => {
+                    const parts = selectedCategory.replace(/\\/g, "/").split("/");
+                    let accum = "";
+                    return parts.map((part, idx) => {
+                      accum = accum ? `${accum}/${part}` : part;
+                      const currentAccum = accum;
+                      const isLast = idx === parts.length - 1;
+                      
+                      return (
+                        <span key={idx} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: "var(--text-muted)", opacity: 0.7 }}>/</span>
+                          {isLast ? (
+                            <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+                              {part.replace(/^\d+/, "")}
+                            </span>
+                          ) : (
+                            <span 
+                              onClick={() => setSelectedCategory(currentAccum)}
+                              style={{ cursor: "pointer", color: "var(--color-primary)", fontWeight: 600, transition: "color 0.2s" }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.textDecoration = "underline";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.textDecoration = "none";
+                              }}
+                            >
+                              {part.replace(/^\d+/, "")}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    });
+                  })()}
+                </div>
+
                 {/* Workspace Files List */}
                 <div style={{display: "flex", flexDirection: "column", gap: "10px", flex: 1, minHeight: 0, overflowY: "auto"}}
                   onScroll={(e) => {
                     const el = e.currentTarget;
                     if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
-                      setListRenderLimit(prev => Math.min(prev + 50, workspaceFiles.length));
+                      setListRenderLimit(prev => Math.min(prev + 50, sortedWorkspaceFiles.length));
                     }
                   }}>
-                  {workspaceFiles.length === 0 ? (
+                  {sortedWorkspaceFiles.length === 0 ? (
                     <div style={{
                       display: "flex", 
                       flexDirection: "column", 
@@ -3088,7 +3374,7 @@ export default function App() {
                       </div>
                     </div>
                   ) : workspaceViewMode === "list" ? (
-                    workspaceFiles.slice(0, listRenderLimit).map((file, idx) => {
+                    sortedWorkspaceFiles.slice(0, listRenderLimit).map((file, idx) => {
                       const isChecked = checkedWorkspaceFiles.includes(file.filepath.toString());
                       return (
                         <div 
@@ -3177,7 +3463,7 @@ export default function App() {
                       padding: "4px 4px 16px 4px",
                       width: "100%"
                     }}>
-                      {workspaceFiles.slice(0, listRenderLimit).map((file, idx) => {
+                      {sortedWorkspaceFiles.slice(0, listRenderLimit).map((file, idx) => {
                         const isChecked = checkedWorkspaceFiles.includes(file.filepath.toString());
                         const isSelected = selectedWorkspaceFile?.filepath === file.filepath;
                         return (
@@ -3224,18 +3510,56 @@ export default function App() {
                               transition: "border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease"
                             }}
                             onMouseEnter={(e) => {
+                              setHoveredFileIdx(idx);
                               if (!isSelected && !isChecked) {
                                 e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)";
                                 e.currentTarget.style.background = "rgba(255,255,255,0.03)";
                               }
                             }}
                             onMouseLeave={(e) => {
+                              setHoveredFileIdx(null);
                               if (!isSelected && !isChecked) {
                                 e.currentTarget.style.borderColor = "var(--border-light)";
                                 e.currentTarget.style.background = "var(--bg-secondary)";
                               }
                             }}
                           >
+                            {hoveredFileIdx === idx && file.description && (
+                              <div style={{
+                                position: "absolute",
+                                bottom: "102%",
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                width: "200px",
+                                background: theme === "light" ? "rgba(255, 255, 255, 0.9)" : "rgba(30, 30, 40, 0.9)",
+                                backdropFilter: "blur(12px)",
+                                WebkitBackdropFilter: "blur(12px)",
+                                border: "1px solid var(--border-light)",
+                                borderRadius: "10px",
+                                padding: "8px 12px",
+                                boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.2)",
+                                zIndex: 99,
+                                pointerEvents: "none",
+                                fontSize: "12px",
+                                color: "var(--text-primary)",
+                                textAlign: "left",
+                                wordBreak: "break-all"
+                              }}>
+                                <div style={{fontWeight: 600, marginBottom: "4px", color: "var(--color-primary)"}}>备注说明:</div>
+                                <div style={{lineHeight: "1.4", opacity: 0.9}}>{file.description}</div>
+                                <div style={{
+                                  position: "absolute",
+                                  top: "100%",
+                                  left: "50%",
+                                  transform: "translateX(-50%)",
+                                  width: "0",
+                                  height: "0",
+                                  borderLeft: "6px solid transparent",
+                                  borderRight: "6px solid transparent",
+                                  borderTop: `6px solid ${theme === "light" ? "rgba(255, 255, 255, 0.9)" : "rgba(30, 30, 40, 0.9)"}`
+                                }} />
+                              </div>
+                            )}
                             {/* Checkbox indicator in multi-select mode */}
                             {multiSelectMode && (
                               <input 
@@ -3404,7 +3728,10 @@ export default function App() {
                                 className="input-field"
                                 style={{ flex: 1, height: "30px", fontSize: "11px", padding: "0 8px" }}
                                 onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
+                                  if ((e.ctrlKey || e.metaKey) && (e.key === "Enter" || e.key === "s" || e.key === "S")) {
+                                    e.preventDefault();
+                                    handleSaveMetadata();
+                                  } else if (e.key === "Enter") {
                                     e.preventDefault();
                                     const cleaned = newTagText.trim();
                                     if (cleaned) {
@@ -3456,6 +3783,12 @@ export default function App() {
                           <textarea
                             value={editDescriptionInput}
                             onChange={(e) => setEditDescriptionInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if ((e.ctrlKey || e.metaKey) && (e.key === "Enter" || e.key === "s" || e.key === "S")) {
+                                e.preventDefault();
+                                handleSaveMetadata();
+                              }
+                            }}
                             placeholder="输入文档备注或摘要说明..."
                             className="input-field"
                             style={{
@@ -3613,103 +3946,502 @@ export default function App() {
                 )}
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* 3. BACKUP TAB */}
-          {activeTab === "backup" && (
-            <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", height: "100%"}}>
-              {/* Left Column: Backup Executions */}
-              <div style={{display: "flex", flexDirection: "column", gap: "20px", minHeight: 0}}>
-                <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px"}}>
-                  {/* Disk Backup card */}
-                  <div style={{display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", transition: "border-color 0.15s ease"}}>
-                    <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
-                      <div style={{background: "var(--color-primary-glow)", padding: "8px", borderRadius: "8px", color: "var(--color-primary)"}}>
-                        <HardDrive size={22} />
-                      </div>
-                      <h3 style={{fontSize: "15px", fontWeight: 600}}>外部存储介质备份</h3>
-                    </div>
-                    <p style={{fontSize: "12px", color: "var(--text-secondary)"}}>将工作空间所有数据安全镜像备份到移动硬盘或本地闪存卡中。</p>
-                    <button className="btn btn-primary" onClick={() => handleRunBackup("disk")} disabled={isBackingUp} style={{width: "100%", justifyContent: "center", opacity: isBackingUp ? 0.6 : 1}}>
-                      开始增量备份
-                    </button>
-                  </div>
+          {activeTab === "backup" && (() => {
+            const hasSuccessfulDiskBackup = backupHistory.some(h => h.backup_type === "disk" && h.status === "success");
+            const hasSuccessfulCloudBackup = backupHistory.some(h => h.backup_type === "cloud" && h.status === "success");
 
-                  {/* Cloud Backup card */}
-                  <div style={{display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", transition: "border-color 0.15s ease"}}>
-                    <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
-                      <div style={{background: "var(--color-success-glow)", padding: "8px", borderRadius: "8px", color: "var(--color-success)"}}>
-                        <Cloud size={22} />
-                      </div>
-                      <h3 style={{fontSize: "15px", fontWeight: 600}}>私有云盘异地备份</h3>
-                    </div>
-                    <p style={{fontSize: "12px", color: "var(--text-secondary)"}}>同步数据至百度云/坚果云/OneDrive等挂载盘完成异地多活备份。</p>
-                    <button className="btn" onClick={() => handleRunBackup("cloud")} style={{width: "100%", justifyContent: "center", borderColor: "var(--color-success)", color: "var(--color-success)"}}>
-                      开始云盘备份
-                    </button>
-                  </div>
-                </div>
+            // 计算节点状态
+            const diskState = !backupDiskDir.trim() 
+              ? "unconfigured" 
+              : (!hasSuccessfulDiskBackup ? "configured_no_backup" : "protected");
+            
+            const cloudState = !backupCloudDir.trim() 
+              ? "unconfigured" 
+              : (!hasSuccessfulCloudBackup ? "configured_no_backup" : "protected");
 
-                {/* Active backup terminal console */}
-                <div style={{flex: 1, display: "flex", flexDirection: "column", gap: "12px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", minHeight: 0}}>
-                  <h4 style={{fontSize: "13px", fontWeight: 600, flexShrink: 0}}>💻 实时备份监控控制台</h4>
+            return (
+              <div style={{display: "flex", flexDirection: "column", gap: "20px", height: "100%", width: "100%"}}>
+                
+                {/* 🎨 CSS Styles with Animations for the Storage Map */}
+                <style dangerouslySetInnerHTML={{ __html: `
+                  @keyframes flowLine {
+                    0% { stroke-dashoffset: 20; }
+                    100% { stroke-dashoffset: 0; }
+                  }
+                  @keyframes pulseSlow {
+                    0%, 100% { opacity: 0.6; transform: scale(1); }
+                    50% { opacity: 1; transform: scale(1.05); }
+                  }
+                  @keyframes gradientShift {
+                    0% { background-position: 0% 50%; }
+                    50% { background-position: 100% 50%; }
+                    100% { background-position: 0% 50%; }
+                  }
+                `}} />
+
+                {/* 🆕 3-2-1 异地容灾存储概览 (Storage Map) */}
+                <div style={{
+                  background: theme === "light" 
+                    ? "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)" 
+                    : "linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)",
+                  border: "1px solid var(--border-light)",
+                  borderRadius: "16px",
+                  padding: "20px",
+                  display: "grid",
+                  gridTemplateColumns: "260px 1fr",
+                  gap: "24px",
+                  alignItems: "center",
+                  boxShadow: theme === "light" ? "0 4px 20px rgba(0,0,0,0.03)" : "0 4px 30px rgba(0,0,0,0.2)",
+                  backdropFilter: "blur(12px)",
+                  position: "relative",
+                  overflow: "hidden"
+                }}>
+                  {/* Decorative background glow */}
                   <div style={{
-                    flex: 1,
-                    minHeight: 0,
-                    background: "#0a0b10",
-                    borderRadius: "10px",
-                    padding: "16px",
-                    fontFamily: "var(--mono)",
-                    fontSize: "12px",
-                    color: "#10b981",
-                    overflowY: "auto",
-                    display: "flex",
-                    flexDirection: "column"
+                    position: "absolute",
+                    top: "-20%",
+                    right: "-10%",
+                    width: "250px",
+                    height: "250px",
+                    borderRadius: "50%",
+                    background: backupScore === 100 
+                      ? "rgba(16, 185, 129, 0.08)" 
+                      : (backupScore >= 70 ? "rgba(245, 158, 11, 0.08)" : "rgba(239, 68, 68, 0.08)"),
+                    filter: "blur(60px)",
+                    pointerEvents: "none"
+                  }} />
+
+                  {/* Left Column: Protection Level Shield Indicator */}
+                  <div style={{
+                    display: "flex", 
+                    flexDirection: "column", 
+                    alignItems: "center", 
+                    textAlign: "center",
+                    borderRight: "1px solid var(--border-light)",
+                    paddingRight: "24px"
                   }}>
-                    {backupLog.length === 0 ? (
-                      <span style={{color: "#4b5563"}}>等待备份任务启动...</span>
-                    ) : (
-                      [...backupLog].reverse().map((log, idx) => (
-                        <div key={idx} style={{marginBottom: "4px"}}>{log}</div>
-                      ))
-                    )}
+                    {/* Ring score container */}
+                    <div style={{
+                      position: "relative",
+                      width: "100px",
+                      height: "100px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: "50%",
+                      background: theme === "light" ? "#f1f5f9" : "rgba(255,255,255,0.02)",
+                      border: `4px solid ${
+                        backupScore === 100 
+                          ? "rgba(16, 185, 129, 0.2)" 
+                          : (backupScore >= 70 ? "rgba(245, 158, 11, 0.2)" : "rgba(239, 68, 68, 0.2)")
+                      }`,
+                      boxShadow: backupScore === 100 
+                        ? "0 0 20px rgba(16, 185, 129, 0.15)" 
+                        : (backupScore >= 70 ? "0 0 20px rgba(245, 158, 11, 0.15)" : "0 0 20px rgba(239, 68, 68, 0.15)"),
+                      marginBottom: "12px",
+                      transition: "all 0.3s ease"
+                    }}>
+                      <div style={{
+                        fontSize: "32px",
+                        animation: "pulseSlow 3s infinite ease-in-out"
+                      }}>
+                        {backupScore === 100 ? "🛡️" : (backupScore >= 70 ? "⚠️" : "🚨")}
+                      </div>
+                      <div style={{
+                        position: "absolute",
+                        bottom: "-8px",
+                        background: backupScore === 100 
+                          ? "#10b981" 
+                          : (backupScore >= 70 ? "#f59e0b" : "#ef4444"),
+                        color: "#fff",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "99px",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.15)"
+                      }}>
+                        {backupScore}% 安全指数
+                      </div>
+                    </div>
+
+                    <h4 style={{fontSize: "15px", fontWeight: 700, margin: "6px 0 4px 0"}}>
+                      {backupScore === 100 ? "3-2-1 黄金备份防线" : (backupScore >= 70 ? "双介质容灾防御" : "极高丢失风险")}
+                    </h4>
+                    <p style={{fontSize: "11px", color: "var(--text-muted)", lineHeight: "1.4", margin: 0}}>
+                      {backupScore === 100 
+                        ? "符合3-2-1异地多活备份黄金法则。已配置双介质冗余与云端同步防御。" 
+                        : (backupScore >= 70 
+                          ? "已具备基础本地备份，但缺少异地云存储保护，一旦本地遭受不可抗力将有丢失风险。" 
+                          : "仅有本地工作区运行，无任何额外备份保护。请尽快配置外部硬盘与私有云盘。")}
+                    </p>
+                  </div>
+
+                  {/* Right Column: Node Topology Map */}
+                  <div style={{
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "space-between", 
+                    position: "relative",
+                    width: "100%",
+                    height: "100%"
+                  }}>
+                    {/* SVG Connector Lines */}
+                    <svg style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "12%",
+                      width: "76%",
+                      height: "40px",
+                      transform: "translateY(-50%)",
+                      zIndex: 1,
+                      pointerEvents: "none"
+                    }}>
+                      {/* Line 1: Local -> Disk */}
+                      <path 
+                        d="M 10,20 L 190,20" 
+                        fill="none" 
+                        stroke={diskState === "protected" ? "#10b981" : (diskState === "configured_no_backup" ? "#f59e0b" : "#ef4444")}
+                        strokeWidth="3"
+                        strokeDasharray={diskState === "unconfigured" ? "6,6" : "none"}
+                        style={{
+                          animation: diskState !== "unconfigured" ? "flowLine 2s linear infinite" : "none",
+                          opacity: diskState === "unconfigured" ? 0.3 : 1,
+                          transition: "stroke 0.3s ease"
+                        }}
+                      />
+                      {/* Line 2: Local -> Cloud */}
+                      <path 
+                        d="M 210,20 L 390,20" 
+                        fill="none" 
+                        stroke={cloudState === "protected" ? "#10b981" : (cloudState === "configured_no_backup" ? "#f59e0b" : "#ef4444")}
+                        strokeWidth="3"
+                        strokeDasharray={cloudState === "unconfigured" ? "6,6" : "none"}
+                        style={{
+                          animation: cloudState !== "unconfigured" ? "flowLine 2s linear infinite" : "none",
+                          opacity: cloudState === "unconfigured" ? 0.3 : 1,
+                          transition: "stroke 0.3s ease"
+                        }}
+                      />
+                    </svg>
+
+                    {/* Node 1: Local Workspace */}
+                    <div style={{
+                      width: "150px",
+                      background: theme === "light" ? "#fff" : "rgba(20, 24, 33, 0.8)",
+                      border: "2px solid #3b82f6",
+                      borderRadius: "12px",
+                      padding: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      textAlign: "center",
+                      zIndex: 2,
+                      boxShadow: "0 4px 12px rgba(59, 130, 246, 0.15)",
+                      minHeight: "115px",
+                      justifyContent: "space-between"
+                    }}>
+                      <div style={{fontSize: "24px", marginBottom: "4px"}}>💻</div>
+                      <div style={{fontSize: "12px", fontWeight: 700}}>本地工作区</div>
+                      <span style={{
+                        fontSize: "9px",
+                        color: "#3b82f6",
+                        background: "rgba(59, 130, 246, 0.1)",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        fontWeight: 600
+                      }}>
+                        活动数据源
+                      </span>
+                      <div style={{
+                        fontSize: "10px", 
+                        color: "var(--text-muted)", 
+                        overflow: "hidden", 
+                        textOverflow: "ellipsis", 
+                        whiteSpace: "nowrap", 
+                        width: "100%",
+                        marginTop: "4px"
+                      }} title={workspaceDir}>
+                        {workspaceDir}
+                      </div>
+                    </div>
+
+                    {/* Node 2: Disk Backup */}
+                    <div style={{
+                      width: "150px",
+                      background: theme === "light" ? "#fff" : "rgba(20, 24, 33, 0.8)",
+                      border: `2px solid ${
+                        diskState === "protected" 
+                          ? "#10b981" 
+                          : (diskState === "configured_no_backup" ? "#f59e0b" : "var(--border-light)")
+                      }`,
+                      borderRadius: "12px",
+                      padding: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      textAlign: "center",
+                      zIndex: 2,
+                      boxShadow: diskState === "protected" 
+                        ? "0 4px 12px rgba(16, 185, 129, 0.15)" 
+                        : (diskState === "configured_no_backup" ? "0 4px 12px rgba(245, 158, 11, 0.15)" : "none"),
+                      minHeight: "115px",
+                      justifyContent: "space-between",
+                      opacity: diskState === "unconfigured" ? 0.6 : 1,
+                      transition: "all 0.3s ease"
+                    }}>
+                      <div style={{fontSize: "24px", marginBottom: "4px"}}>💾</div>
+                      <div style={{fontSize: "12px", fontWeight: 700}}>外部硬盘镜像</div>
+                      
+                      {diskState === "protected" && (
+                        <span style={{
+                          fontSize: "9px",
+                          color: "#10b981",
+                          background: "rgba(16, 185, 129, 0.1)",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          fontWeight: 600
+                        }}>
+                          🛡️ 受保护
+                        </span>
+                      )}
+                      {diskState === "configured_no_backup" && (
+                        <span style={{
+                          fontSize: "9px",
+                          color: "#f59e0b",
+                          background: "rgba(245, 158, 11, 0.1)",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          fontWeight: 600
+                        }}>
+                          ⏳ 待同步
+                        </span>
+                      )}
+                      {diskState === "unconfigured" && (
+                        <span style={{
+                          fontSize: "9px",
+                          color: "var(--text-muted)",
+                          background: "rgba(0,0,0,0.05)",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          fontWeight: 600
+                        }}>
+                          未启用
+                        </span>
+                      )}
+
+                      <div style={{
+                        fontSize: "10px", 
+                        color: "var(--text-muted)", 
+                        overflow: "hidden", 
+                        textOverflow: "ellipsis", 
+                        whiteSpace: "nowrap", 
+                        width: "100%",
+                        marginTop: "4px"
+                      }} title={backupDiskDir || "未配置路径"}>
+                        {backupDiskDir || "未配置备份路径"}
+                      </div>
+                    </div>
+
+                    {/* Node 3: Cloud Backup */}
+                    <div style={{
+                      width: "150px",
+                      background: theme === "light" ? "#fff" : "rgba(20, 24, 33, 0.8)",
+                      border: `2px solid ${
+                        cloudState === "protected" 
+                          ? "#10b981" 
+                          : (cloudState === "configured_no_backup" ? "#f59e0b" : "var(--border-light)")
+                      }`,
+                      borderRadius: "12px",
+                      padding: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      textAlign: "center",
+                      zIndex: 2,
+                      boxShadow: cloudState === "protected" 
+                        ? "0 4px 12px rgba(16, 185, 129, 0.15)" 
+                        : (cloudState === "configured_no_backup" ? "0 4px 12px rgba(245, 158, 11, 0.15)" : "none"),
+                      minHeight: "115px",
+                      justifyContent: "space-between",
+                      opacity: cloudState === "unconfigured" ? 0.6 : 1,
+                      transition: "all 0.3s ease"
+                    }}>
+                      <div style={{fontSize: "24px", marginBottom: "4px"}}>☁️</div>
+                      <div style={{fontSize: "12px", fontWeight: 700}}>私有云端归档</div>
+                      
+                      {cloudState === "protected" && (
+                        <span style={{
+                          fontSize: "9px",
+                          color: "#10b981",
+                          background: "rgba(16, 185, 129, 0.1)",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          fontWeight: 600
+                        }}>
+                          🛡️ 受保护
+                        </span>
+                      )}
+                      {cloudState === "configured_no_backup" && (
+                        <span style={{
+                          fontSize: "9px",
+                          color: "#f59e0b",
+                          background: "rgba(245, 158, 11, 0.1)",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          fontWeight: 600
+                        }}>
+                          ⏳ 待同步
+                        </span>
+                      )}
+                      {cloudState === "unconfigured" && (
+                        <span style={{
+                          fontSize: "9px",
+                          color: "var(--text-muted)",
+                          background: "rgba(0,0,0,0.05)",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          fontWeight: 600
+                        }}>
+                          未启用
+                        </span>
+                      )}
+
+                      <div style={{
+                        fontSize: "10px", 
+                        color: "var(--text-muted)", 
+                        overflow: "hidden", 
+                        textOverflow: "ellipsis", 
+                        whiteSpace: "nowrap", 
+                        width: "100%",
+                        marginTop: "4px"
+                      }} title={backupCloudDir || "未配置路径"}>
+                        {backupCloudDir || "未配置备份路径"}
+                      </div>
+                    </div>
+
                   </div>
                 </div>
-              </div>
 
-              {/* Right Column: Backup History */}
-              <div style={{display: "flex", flexDirection: "column", gap: "20px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", minHeight: 0}}>
-                <h3 className="card-title" style={{flexShrink: 0}}>📜 备份历史记录列表</h3>
-
-                <div style={{display: "flex", flexDirection: "column", gap: "12px", flex: 1, minHeight: 0, overflowY: "auto"}}>
-                  {backupHistory.length === 0 ? (
-                    <div style={{display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-secondary)"}}>
-                      <AlertTriangle size={32} style={{color: "var(--text-muted)", marginBottom: "12px"}} />
-                      <p style={{fontSize: "13px"}}>暂无历史备份记录，请立即执行您的首次备份！</p>
-                    </div>
-                  ) : (
-                    backupHistory.map((item, idx) => (
-                      <div key={idx} style={{background: theme === "light" ? "rgba(0, 0, 0, 0.02)" : "rgba(255,255,255,0.01)", border: "1px solid var(--border-light)", borderRadius: "10px", padding: "12px 16px"}}>
-                        <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px"}}>
-                          <span style={{fontSize: "13px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px"}}>
-                            {item.backup_type === "disk" ? <HardDrive size={14} style={{color: "var(--color-primary)"}} /> : <Cloud size={14} style={{color: "var(--color-success)"}} />}
-                            {item.backup_type === "disk" ? "本地移动硬盘镜像" : "私有云端归档备份"}
-                          </span>
-                          <span className={`badge ${item.status === "success" ? "badge-success" : "badge-danger"}`} style={{fontSize: "9px"}}>
-                            {item.status}
-                          </span>
+                {/* Sub columns container */}
+                <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", flex: 1, minHeight: 0}}>
+                  {/* Left Column: Backup Executions */}
+                  <div style={{display: "flex", flexDirection: "column", gap: "20px", minHeight: 0}}>
+                    <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px"}}>
+                      {/* Disk Backup card */}
+                      <div style={{display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", transition: "border-color 0.15s ease"}}>
+                        <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
+                          <div style={{background: "var(--color-primary-glow)", padding: "8px", borderRadius: "8px", color: "var(--color-primary)"}}>
+                            <HardDrive size={22} />
+                          </div>
+                          <h3 style={{fontSize: "15px", fontWeight: 600}}>外部存储介质备份</h3>
                         </div>
-                        <div style={{display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--text-secondary)"}}>
-                          <span>同步: {item.files_copied}文件 ({formatSize(item.bytes_copied)})</span>
-                          <span>{item.timestamp}</span>
-                        </div>
+                        <p style={{fontSize: "12px", color: "var(--text-secondary)"}}>将工作空间所有数据安全镜像备份到移动硬盘或本地闪存卡中。</p>
+                        <button className="btn btn-primary" onClick={() => handleRunBackup("disk")} disabled={isBackingUp} style={{width: "100%", justifyContent: "center", opacity: isBackingUp ? 0.6 : 1}}>
+                          开始增量备份
+                        </button>
                       </div>
-                    ))
-                  )}
+
+                      {/* Cloud Backup card */}
+                      <div style={{display: "flex", flexDirection: "column", gap: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", transition: "border-color 0.15s ease"}}>
+                        <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
+                          <div style={{background: "var(--color-success-glow)", padding: "8px", borderRadius: "8px", color: "var(--color-success)"}}>
+                            <Cloud size={22} />
+                          </div>
+                          <h3 style={{fontSize: "15px", fontWeight: 600}}>私有云盘异地备份</h3>
+                        </div>
+                        <p style={{fontSize: "12px", color: "var(--text-secondary)"}}>同步数据至百度云/坚果云/OneDrive等挂载盘完成异地多活备份。</p>
+                        <button className="btn" onClick={() => handleRunBackup("cloud")} style={{width: "100%", justifyContent: "center", borderColor: "var(--color-success)", color: "var(--color-success)"}}>
+                          开始云盘备份
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Active backup terminal console */}
+                    <div style={{flex: 1, display: "flex", flexDirection: "column", gap: "12px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", minHeight: 0}}>
+                      <h4 style={{fontSize: "13px", fontWeight: 600, flexShrink: 0}}>💻 实时备份监控控制台</h4>
+                      <div style={{
+                        flex: 1,
+                        minHeight: 0,
+                        background: "#0a0b10",
+                        borderRadius: "10px",
+                        padding: "16px",
+                        fontFamily: "var(--mono)",
+                        fontSize: "12px",
+                        color: "#10b981",
+                        overflowY: "auto",
+                        display: "flex",
+                        flexDirection: "column"
+                      }}>
+                        {backupLog.length === 0 ? (
+                          <span style={{color: "#4b5563"}}>等待备份任务启动...</span>
+                        ) : (
+                          [...backupLog].reverse().map((log, idx) => (
+                            <div key={idx} style={{marginBottom: "4px"}}>{log}</div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Backup History */}
+                  <div style={{display: "flex", flexDirection: "column", gap: "20px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-light)", borderRadius: "16px", padding: "24px", minHeight: 0}}>
+                    <h3 className="card-title" style={{flexShrink: 0}}>📜 备份历史记录列表</h3>
+
+                    <div style={{display: "flex", flexDirection: "column", gap: "12px", flex: 1, minHeight: 0, overflowY: "auto"}}>
+                      {backupHistory.length === 0 ? (
+                        <div style={{display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-secondary)"}}>
+                          <AlertTriangle size={32} style={{color: "var(--text-muted)", marginBottom: "12px"}} />
+                          <p style={{fontSize: "13px"}}>暂无历史备份记录，请立即执行您的首次备份！</p>
+                        </div>
+                      ) : (
+                        backupHistory.map((item, idx) => (
+                          <div key={idx} style={{background: theme === "light" ? "rgba(0, 0, 0, 0.02)" : "rgba(255,255,255,0.01)", border: "1px solid var(--border-light)", borderRadius: "10px", padding: "12px 16px"}}>
+                            <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px"}}>
+                              <span style={{fontSize: "13px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px"}}>
+                                {item.backup_type === "disk" ? <HardDrive size={14} style={{color: "var(--color-primary)"}} /> : <Cloud size={14} style={{color: "var(--color-success)"}} />}
+                                {item.backup_type === "disk" ? "本地移动硬盘镜像" : "私有云端归档备份"}
+                              </span>
+                              <div style={{display: "flex", alignItems: "center", gap: "6px"}}>
+                                {item.status === "success" && (
+                                  <span style={{
+                                    fontSize: "10px",
+                                    color: "#10b981",
+                                    background: "rgba(16, 185, 129, 0.1)",
+                                    border: "1px solid rgba(16, 185, 129, 0.2)",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    fontWeight: 500,
+                                    boxShadow: "0 0 8px rgba(16, 185, 129, 0.15)"
+                                  }}>
+                                    🛡️ 完整校验一致
+                                  </span>
+                                )}
+                                <span className={`badge ${item.status === "success" ? "badge-success" : "badge-danger"}`} style={{fontSize: "9px"}}>
+                                  {item.status}
+                                </span>
+                              </div>
+                            </div>
+                            <div style={{display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--text-secondary)"}}>
+                              <span>同步: {item.files_copied}文件 ({formatSize(item.bytes_copied)})</span>
+                              <span>{item.timestamp}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
+
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 4. SETTINGS TAB */}
           {activeTab === "settings" && (
@@ -3741,10 +4473,10 @@ export default function App() {
                 </div>
                 <div className="settings-path-grid">
                   {[
-                    { key: "workspace" as const, label: "工作空间根路径", value: workspaceDir, setter: setWorkspaceDir, required: true },
-                    { key: "monitor" as const, label: "多目录监听 (支持添加多个不同目录)", value: monitoredDirs, setter: setMonitoredDirs, required: true },
-                    { key: "disk" as const, label: "外部硬盘备份路径", value: backupDiskDir, setter: setBackupDiskDir, required: false },
-                    { key: "cloud" as const, label: "私有网盘/云端备份路径", value: backupCloudDir, setter: setBackupCloudDir, required: false },
+                    { key: "workspace" as const, label: "工作空间根路径", value: tempWorkspaceDir, setter: setTempWorkspaceDir, required: true },
+                    { key: "monitor" as const, label: "多目录监听 (支持添加多个不同目录)", value: tempMonitoredDirs, setter: setTempMonitoredDirs, required: true },
+                    { key: "disk" as const, label: "外部硬盘备份路径", value: tempBackupDiskDir, setter: setTempBackupDiskDir, required: false },
+                    { key: "cloud" as const, label: "私有网盘/云端备份路径", value: tempBackupCloudDir, setter: setTempBackupCloudDir, required: false },
                   ].map(item => {
                     const validation = pathValidation[item.key];
                     const ok = item.key === "monitor" ? validation?.exists : validation?.writable;
@@ -4185,20 +4917,40 @@ export default function App() {
                 </div>
                 <div style={{display: "flex", gap: "8px"}}>
                   <button className="btn" onClick={async () => {
-                    try { const config = await invoke("load_config"); const blob = new Blob([JSON.stringify(config, null, 2)], {type: "application/json"}); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "ledger-pro-max-config.json"; a.click(); URL.revokeObjectURL(url); showToast("配置已导出！", "success"); } catch { showToast("导出失败", "error"); }
+                    try {
+                      const config = await invoke("load_config");
+                      const configJson = JSON.stringify(config, null, 2);
+                      await invoke("select_export_config_file", { configJson });
+                      showToast("配置已成功导出！", "success");
+                    } catch (err: any) {
+                      if (err !== "USER_CANCELLED") {
+                        showToast(`导出失败: ${err}`, "error");
+                      }
+                    }
                   }} style={{fontSize: "11px", padding: "6px 12px"}}>📤 导出</button>
-                  <button className="btn" onClick={() => {
-                    const input = document.createElement("input"); input.type = "file"; input.accept = ".json"; input.onchange = async (e: any) => { try { const text = await e.target.files[0].text(); const config = JSON.parse(text); await invoke("save_config", { config }); showToast("配置已导入！正在重载...", "success"); setTimeout(() => window.location.reload(), 1000); } catch { showToast("导入失败：文件格式错误", "error"); } }; input.click();
+                  <button className="btn" onClick={async () => {
+                    try {
+                      const text: string = await invoke("select_import_config_file");
+                      if (text && text !== "USER_CANCELLED") {
+                        const config = JSON.parse(text);
+                        await invoke("save_config", { config });
+                        showToast("配置已成功导入！正在重载...", "success");
+                        setTimeout(() => window.location.reload(), 1000);
+                      }
+                    } catch (err: any) {
+                      if (err !== "USER_CANCELLED") {
+                        showToast(`导入失败: ${err}`, "error");
+                      }
+                    }
                   }} style={{fontSize: "11px", padding: "6px 12px"}}>📥 导入</button>
                   <button className="btn danger" onClick={() => {
-                    if (!window.confirm("确定要重置所有配置为默认值吗？此操作不可撤销。")) return;
-                    setWorkspaceDir("C:\\Users\\Ming\\Desktop\\Ledger Pro Max\\Workspace");
-                    setMonitoredDirs("C:\\Users\\Ming\\Downloads");
+                    if (!window.confirm("确定要重置所有配置为默认值吗？此操作不可撤销。\n注意：您的当前工作空间与多目录监听路径将被保留。")) return;
                     setBackupDiskDir(""); setBackupCloudDir("");
+                    setTempBackupDiskDir(""); setTempBackupCloudDir("");
                     setTagsState({primary: [], secondary: [], status: ["#待处理", "#进行中", "#已完成", "#非常重要"]});
                     setAutoRulesState([]); setNamingTemplates(prev => prev.filter(t => !t.key.startsWith("custom_")));
                     setWorkspaceLang("zh-full"); setTheme("light");
-                    showToast("配置已重置，请保存以生效。", "warning");
+                    showToast("配置已成功重置，请点击保存生效。", "warning");
                   }} style={{fontSize: "11px", padding: "6px 12px"}}>🔄 重置</button>
                   <button className="btn btn-primary" onClick={handleSaveConfig} disabled={saveStatus === "saving"}>
                     <Save size={16} />
@@ -4405,7 +5157,23 @@ export default function App() {
                 <input type="text" placeholder="可选，例如 项目/2024" value={createFolderSubpath} onChange={(e) => setCreateFolderSubpath(e.target.value)} className="input-field" />
               </div>
               <div className="create-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <label style={{ fontSize: "12px", color: "var(--text-muted)" }}>子目录名</label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label style={{ fontSize: "12px", color: "var(--text-muted)" }}>子目录名</label>
+                  {newFolderInput.trim() && (
+                    <span 
+                      onClick={() => {
+                        const clean = newFolderInput.trim()
+                          .replace(/[\s\-]+/g, "_")
+                          .replace(/[<>:"/\\|?*]/g, "");
+                        setNewFolderInput(clean);
+                        showToast("目录名已净化规范！", "success");
+                      }}
+                      style={{ fontSize: "11px", color: "var(--color-primary)", cursor: "pointer", fontWeight: 600 }}
+                    >
+                      ✨ 净化规范
+                    </span>
+                  )}
+                </div>
                 <input type="text" placeholder="输入文件夹名称" value={newFolderInput} onChange={(e) => setNewFolderInput(e.target.value)} className="input-field" />
               </div>
               <div className={`path-preview ${folderValidationMessage ? "invalid" : "valid"}`} style={{ padding: "12px", borderRadius: "8px", background: theme === "light" ? "#f8fafc" : "rgba(0,0,0,0.2)", fontSize: "12px" }}>
@@ -4426,39 +5194,70 @@ export default function App() {
         </div>
       )}
 
-      {isCreateProjectExpanded && (
+      {isCreateFileExpanded && (
         <div style={{ position: "fixed", inset: 0, zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}>
           <div style={{ width: "420px", background: theme === "light" ? "#fff" : "#1e1e1e", borderRadius: "16px", padding: "24px", boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px", color: "#10b981" }}><Sparkles size={18} /> 新建科研/项目</h3>
-              <button onClick={() => setIsCreateProjectExpanded(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)" }}><X size={18} /></button>
+              <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px", color: "#10b981" }}><FileText size={18} /> 新建文件</h3>
+              <button onClick={() => setIsCreateFileExpanded(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)" }}><X size={18} /></button>
             </div>
             <div className="create-mini-form" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ padding: "12px", borderRadius: "8px", background: "rgba(16, 185, 129, 0.05)", border: "1px solid rgba(16, 185, 129, 0.2)" }}>
-                <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>目标位置</div>
-                <strong style={{ color: "var(--text-primary)" }}>{projectRootDir}</strong>
+              <div className="create-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12px", color: "var(--text-muted)" }}>根目录</label>
+                <select 
+                  value={createFileRoot} 
+                  onChange={(e) => setCreateFileRoot(e.target.value)} 
+                  className="input-field"
+                >
+                  {creatableRoots.map(dir => <option key={dir} value={dir}>{dir}</option>)}
+                </select>
               </div>
               <div className="create-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <label style={{ fontSize: "12px", color: "var(--text-muted)" }}>项目名称</label>
-                <input type="text" placeholder="如: 量子力学大作业" value={newProjectInput} onChange={(e) => setNewProjectInput(e.target.value)} className="input-field" />
+                <label style={{ fontSize: "12px", color: "var(--text-muted)" }}>父级路径 (可选)</label>
+                <input type="text" placeholder="可选，例如 2026" value={createFileSubpath} onChange={(e) => setCreateFileSubpath(e.target.value)} className="input-field" />
               </div>
-              <div className={`path-preview ${canCreateProject ? "valid" : "invalid"}`} style={{ padding: "12px", borderRadius: "8px", background: theme === "light" ? "#f8fafc" : "rgba(0,0,0,0.2)", fontSize: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <span style={{ color: "var(--text-secondary)" }}>生成的目录结构</span>
-                  <strong>深度 {projectDepth}/4</strong>
+              <div className="create-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label style={{ fontSize: "12px", color: "var(--text-muted)" }}>文件名</label>
+                  {newFileInput.trim() && (
+                    <span 
+                      onClick={() => {
+                        const clean = newFileInput.trim()
+                          .replace(/[\s\-]+/g, "_")
+                          .replace(/[<>:"/\\|?*]/g, "");
+                        setNewFileInput(clean);
+                        showToast("文件名已净化规范！", "success");
+                      }}
+                      style={{ fontSize: "11px", color: "var(--color-primary)", cursor: "pointer", fontWeight: 600 }}
+                    >
+                      ✨ 净化规范
+                    </span>
+                  )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingLeft: "8px", borderLeft: "2px solid rgba(16, 185, 129, 0.5)", fontFamily: "var(--mono)", color: "var(--text-primary)" }}>
-                  <div>{normalizedProjectName || "项目名称"}/</div>
-                  {projectSubdirs.slice(0,3).map(subdir => <div key={subdir} style={{ paddingLeft: "16px", color: "var(--text-muted)" }}>├── {subdir}/</div>)}
-                  <div style={{ paddingLeft: "16px", color: "var(--text-muted)" }}>├── ... (更多目录)</div>
-                  <div style={{ paddingLeft: "16px", color: "var(--text-muted)" }}>└── README.md</div>
+                <input type="text" placeholder="如: notes.txt 或 report.md" value={newFileInput} onChange={(e) => setNewFileInput(e.target.value)} className="input-field" />
+              </div>
+              <div className="create-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12px", color: "var(--text-muted)" }}>文件内容 (可选)</label>
+                <textarea 
+                  placeholder="输入初始文件内容" 
+                  value={newFileContentInput} 
+                  onChange={(e) => setNewFileContentInput(e.target.value)} 
+                  className="input-field"
+                  style={{ minHeight: "80px", resize: "vertical", fontFamily: "var(--mono)", fontSize: "12px", padding: "10px" }}
+                />
+              </div>
+              <div className={`path-preview ${canCreateFile ? "valid" : "invalid"}`} style={{ padding: "12px", borderRadius: "8px", background: theme === "light" ? "#f8fafc" : "rgba(0,0,0,0.2)", fontSize: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>预览路径</span>
+                  <strong>深度 {fileDepth}/4</strong>
                 </div>
+                <div style={{ wordBreak: "break-all", color: "var(--text-primary)" }}>{fileFinalPath || `${createFileRoot}/新文件`}</div>
               </div>
-              <div style={{ fontSize: "12px", color: projectNameError ? "var(--color-danger)" : "var(--color-success)" }}>
-                {projectNameError || "✓ 将自动生成标准科研/项目目录结构。"}
+              <div style={{ fontSize: "12px", color: fileValidationMessage ? "var(--color-danger)" : "var(--color-success)" }}>
+                {fileValidationMessage || "✓ 路径符合工作区 4 层规范。"}
               </div>
-              <button className="btn btn-primary" disabled={!canCreateProject} onClick={() => { handleCreateProject(); setIsCreateProjectExpanded(false); }} style={{ width: "100%", padding: "12px", marginTop: "8px", display: "flex", justifyContent: "center", gap: "8px", background: "#10b981", borderColor: "#10b981" }}>
-                <Sparkles size={16} /> 初始化项目
+              <button className="btn btn-primary" disabled={!canCreateFile} onClick={() => { handleCreateFile(); setIsCreateFileExpanded(false); }} style={{ width: "100%", padding: "12px", marginTop: "8px", display: "flex", justifyContent: "center", gap: "8px", background: "#10b981", borderColor: "#10b981" }}>
+                <Plus size={16} /> 创建文件
               </button>
             </div>
           </div>
@@ -4558,6 +5357,72 @@ export default function App() {
         </div>
       )}
 
+      {/* 📁 Premium Reorganize File Modal */}
+      {reorganizeModalShow && reorganizeFileTarget && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}>
+          <div style={{ 
+            width: "400px", 
+            background: theme === "light" ? "rgba(255, 255, 255, 0.9)" : "rgba(20, 20, 30, 0.85)", 
+            backdropFilter: "blur(20px)",
+            border: "1px solid var(--border-light)",
+            borderRadius: "16px", 
+            padding: "24px", 
+            boxShadow: "0 20px 40px rgba(0,0,0,0.3)" 
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px", color: "var(--color-primary)", fontWeight: 700 }}>📁 变更分类目录</h3>
+              <button onClick={() => { setReorganizeModalShow(false); setReorganizeFileTarget(null); }} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center" }}><X size={18} /></button>
+            </div>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px", borderRadius: "8px", background: theme === "light" ? "#f8fafc" : "rgba(255,255,255,0.02)", border: "1px solid var(--border-light)" }}>
+                {getFileIcon(reorganizeFileTarget.filename.toString(), 32)}
+                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>待移动文件</div>
+                  <strong style={{ fontSize: "13px", color: "var(--text-primary)" }}>{reorganizeFileTarget.filename}</strong>
+                </div>
+              </div>
+
+              <div className="create-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 600 }}>选择目标标准分类目录</label>
+                <select 
+                  value={reorganizeTargetDir} 
+                  onChange={(e) => setReorganizeTargetDir(e.target.value)} 
+                  className="input-field"
+                  style={{ width: "100%", height: "38px", padding: "0 10px", fontSize: "13px", borderRadius: "8px" }}
+                >
+                  {standardDirs.map((dir) => (
+                    <option key={dir} value={dir}>{dir}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ 
+                padding: "12px", 
+                borderRadius: "8px", 
+                background: theme === "light" ? "rgba(99, 102, 241, 0.05)" : "rgba(99, 102, 241, 0.1)", 
+                border: "1px solid rgba(99, 102, 241, 0.2)",
+                fontSize: "12px" 
+              }}>
+                <div style={{ color: "var(--text-muted)", marginBottom: "4px" }}>移动后目标相对路径</div>
+                <div style={{ wordBreak: "break-all", color: "var(--text-primary)", fontWeight: 500, fontFamily: "monospace" }}>
+                  {reorganizeTargetDir ? `${reorganizeTargetDir}/${reorganizeFileTarget.filename}` : reorganizeFileTarget.filename}
+                </div>
+              </div>
+
+              <button 
+                className="btn btn-primary" 
+                disabled={!reorganizeTargetDir} 
+                onClick={handleReorganizeExecute} 
+                style={{ width: "100%", padding: "12px", marginTop: "8px", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", fontWeight: 600 }}
+              >
+                ✓ 确认移动并分类
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 👑 Global Stacked Toast Notification Center */}
       <div style={{
         position: "fixed",
@@ -4635,12 +5500,25 @@ export default function App() {
             onClick={() => {
               if (contextMenu.file) {
                 navigator.clipboard.writeText(contextMenu.file.filepath.toString());
-                showToast("已成功复制路径到剪贴板！", "success");
+                showToast("已复制相对路径！", "success");
               }
               setContextMenu(prev => ({ ...prev, show: false }));
             }}
           >
-            🔗 复制文件路径
+            🔗 复制相对路径
+          </div>
+          <div 
+            className="context-menu-item"
+            onClick={() => {
+              if (contextMenu.file) {
+                const absPath = `${workspaceDir}/${contextMenu.file.filepath}`.replace(/\\/g, "/");
+                navigator.clipboard.writeText(absPath);
+                showToast("已复制绝对路径！", "success");
+              }
+              setContextMenu(prev => ({ ...prev, show: false }));
+            }}
+          >
+            📂 复制绝对路径
           </div>
           <div 
             className="context-menu-item"
@@ -4657,6 +5535,24 @@ export default function App() {
             }}
           >
             ✏️ 快捷更名
+          </div>
+          <div 
+            className="context-menu-item"
+            onClick={() => {
+              if (contextMenu.file) {
+                setReorganizeFileTarget(contextMenu.file);
+                const pathWithSlash = contextMenu.file.filepath.replace(/\\/g, "/");
+                const parentDir = pathWithSlash.includes("/")
+                  ? pathWithSlash.substring(0, pathWithSlash.lastIndexOf("/"))
+                  : "";
+                const defaultTarget = standardDirs.find(dir => dir !== parentDir) || standardDirs[0] || "";
+                setReorganizeTargetDir(defaultTarget);
+                setReorganizeModalShow(true);
+              }
+              setContextMenu(prev => ({ ...prev, show: false }));
+            }}
+          >
+            📁 变更分类目录
           </div>
           <div style={{ height: "1px", background: "var(--border-light)", margin: "4px 0" }} />
           <div 

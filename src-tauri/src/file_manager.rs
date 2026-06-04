@@ -224,13 +224,9 @@ impl FileManager {
         Ok(())
     }
 
-    pub fn init_project_structure(project_name: &str, workspace_dir: &str, standard_dirs: Vec<String>) -> Result<(), String> {
+    pub fn init_project_structure(project_name: &str, workspace_dir: &str, project_root_dir: &str) -> Result<(), String> {
         let ws_root = Path::new(workspace_dir);
-        if standard_dirs.len() < 4 {
-            return Err("标准文件夹配置少于4个，无法自动划分项目！".to_string());
-        }
-        let proj_folder = &standard_dirs[3]; // Typically "03Projects" or "03项目管理"
-        let proj_dir = ws_root.join(proj_folder).join(project_name);
+        let proj_dir = ws_root.join(project_root_dir).join(project_name);
 
         let ws_root_abs = ws_root.canonicalize().map_err(|e| e.to_string())?;
         fs::create_dir_all(&proj_dir).map_err(|e| e.to_string())?;
