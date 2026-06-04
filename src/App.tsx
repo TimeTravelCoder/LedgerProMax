@@ -6,6 +6,8 @@ import LiquidGlass from "./components/liquid-glass/LiquidGlass";
 import PreviewPanel from "./components/PreviewPanel";
 import DuplicateFinder from "./components/DuplicateFinder";
 import ZipArchiveModal from "./components/ZipArchiveModal";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import {
   Inbox,
   FolderOpen,
@@ -533,6 +535,45 @@ export default function App() {
       return [];
     }
   };
+
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const handleCheckForUpdates = async (manual: boolean) => {
+    if (isCheckingUpdate) return;
+    setIsCheckingUpdate(true);
+    if (manual) {
+      showToast("正在检查更新...", "info");
+    }
+    try {
+      const update = await check();
+      if (update) {
+        const confirmMsg = `发现新版本 v${update.version}！\n\n更新内容：\n${update.body || "无详细说明"}\n\n是否立即下载并升级？`;
+        if (window.confirm(confirmMsg)) {
+          showToast("正在下载更新，请稍候...", "info");
+          await update.downloadAndInstall();
+          showToast("更新安装成功，正在重启应用...", "success");
+          await relaunch();
+        }
+      } else {
+        if (manual) {
+          showToast("当前已是最新版本！", "success");
+        }
+      }
+    } catch (err: any) {
+      console.error("更新检查失败:", err);
+      if (manual) {
+        showToast(`检查更新失败: ${err}`, "error");
+      }
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleCheckForUpdates(false);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleRefreshData = async () => {
     try {
@@ -5140,9 +5181,37 @@ export default function App() {
                 <p style={{color: "var(--text-secondary)", fontSize: "15px", marginBottom: "12px", lineHeight: 1.6}}>
                   本地桌面文档资产管理控制台<br/>收集 · 整理 · 标签 · 查重 · 备份 — 一条龙工作流
                 </p>
-                <div style={{display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap"}}>
-                  <span style={{padding: "5px 14px", borderRadius: "99px", background: "var(--color-primary)", color: "#fff", fontSize: "12px", fontWeight: 700}}>v2.0.0</span>
+                <div style={{display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap", alignItems: "center"}}>
+                  <span style={{padding: "5px 14px", borderRadius: "99px", background: "var(--color-primary)", color: "#fff", fontSize: "12px", fontWeight: 700}}>v2.1.0</span>
                   <span style={{padding: "5px 14px", borderRadius: "99px", border: "1px solid var(--border-light)", fontSize: "12px", color: "var(--text-secondary)"}}>Windows 旗舰发布版</span>
+                  <button 
+                    onClick={() => handleCheckForUpdates(true)} 
+                    disabled={isCheckingUpdate}
+                    style={{
+                      padding: "4px 14px", 
+                      borderRadius: "99px", 
+                      border: "1px solid var(--color-primary)", 
+                      background: "rgba(99, 102, 241, 0.08)",
+                      color: "var(--color-primary)", 
+                      fontSize: "12px", 
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "var(--color-primary)";
+                      e.currentTarget.style.color = "#fff";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "rgba(99, 102, 241, 0.08)";
+                      e.currentTarget.style.color = "var(--color-primary)";
+                    }}
+                  >
+                    🔄 {isCheckingUpdate ? "正在检查..." : "检查更新"}
+                  </button>
                 </div>
               </div>
 
@@ -5225,7 +5294,7 @@ export default function App() {
                       ["许可证", "MIT"],
                       ["构建日期", "2026-06-04"],
                       ["数据库", "SQLite (bundled)"],
-                      ["版本", "v2.0.0"],
+                      ["版本", "v2.1.0"],
                     ].map(([k, v]) => (
                       <div key={k} style={{display: "flex", justifyContent: "space-between", fontSize: "13px"}}>
                         <span style={{color: "var(--text-muted)"}}>{k}</span>
