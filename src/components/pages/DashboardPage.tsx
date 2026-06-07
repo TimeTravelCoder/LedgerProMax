@@ -70,7 +70,9 @@ export default function DashboardPage({
   const tagCountsMap: Record<string, number> = {};
   allWorkspaceFiles.forEach(f => {
     (f.tags || []).forEach(tag => {
-      tagCountsMap[tag] = (tagCountsMap[tag] || 0) + 1;
+      if (!["#待处理", "#进行中", "#已完成", "#非常重要"].includes(tag)) {
+        tagCountsMap[tag] = (tagCountsMap[tag] || 0) + 1;
+      }
     });
   });
   const sortedTags = Object.entries(tagCountsMap)

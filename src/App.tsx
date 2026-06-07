@@ -170,8 +170,7 @@ export default function App() {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<{action: string; filepath: string; timestamp: number}[]>([]);
 
-  // State: Global Status tags distribution
-  const [tagDistribution, setTagDistribution] = useState<Record<string, number>>({});
+
 
   // Premium Custom Dynamic Configuration States
   const [tagsState, setTagsState] = useState<{ primary: string[]; secondary: string[]; status: string[] }>({
@@ -381,12 +380,11 @@ const normalizeTag = (value: string) => {
 
   const handleRefreshData = async () => {
     try {
-      const [sum, rawFiles, dist, hist] = (await Promise.all([
+      const [sum, rawFiles, hist] = (await Promise.all([
         invoke("get_desktop_summary"),
         invoke("search_files", { workspaceDir: workspaceDirRef.current }),
-        invoke("get_tag_distribution", { workspaceDir: workspaceDirRef.current }),
         invoke("get_backup_history", { workspaceDir: workspaceDirRef.current, limit: 10 })
-      ])) as [any, any[], any, any];
+      ])) as [any, any[], any];
 
       const allFiles = rawFiles.map(processFileRecord);
 
@@ -399,7 +397,6 @@ const normalizeTag = (value: string) => {
       setWorkspaceFiles(allFiles);
       setAllWorkspaceFiles(allFiles);
 
-      setTagDistribution(dist);
       setBackupHistory(hist);
 
       setSearchVersion(s => s + 1);
@@ -1481,7 +1478,7 @@ const handleAddOrUpdateRule = () => {
               setSelectedTagsFilter={setSelectedTagsFilter}
               extensionFilter={extensionFilter}
               setExtensionFilter={setExtensionFilter}
-              tagDistribution={tagDistribution}
+
               standardDirs={standardDirs}
               workspaceDir={workspaceDir}
               createFolderRoot={createFolderRoot}

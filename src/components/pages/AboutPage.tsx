@@ -31,7 +31,7 @@ export default function AboutPage({
           本地桌面文档资产管理控制台<br/>收集 · 整理 · 标签 · 查重 · 备份 — 一条龙工作流
         </p>
         <div style={{display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap", alignItems: "center"}}>
-          <span style={{padding: "5px 14px", borderRadius: "99px", background: "var(--color-primary)", color: "#fff", fontSize: "12px", fontWeight: 700}}>v3.2.1</span>
+          <span style={{padding: "5px 14px", borderRadius: "99px", background: "var(--color-primary)", color: "#fff", fontSize: "12px", fontWeight: 700}}>v3.2.3</span>
           <span style={{padding: "5px 14px", borderRadius: "99px", border: "1px solid var(--border-light)", fontSize: "12px", color: "var(--text-secondary)"}}>Windows 旗舰发布版</span>
           <button 
             onClick={() => handleCheckForUpdates(true)} 
@@ -143,7 +143,7 @@ export default function AboutPage({
               ["许可证", "MIT"],
               ["构建日期", "2026-06-07"],
               ["数据库", "SQLite (bundled)"],
-              ["版本", "v3.2.1"],
+              ["版本", "v3.2.3"],
             ].map(([k, v]) => (
               <div key={k} style={{display: "flex", justifyContent: "space-between", fontSize: "13px"}}>
                 <span style={{color: "var(--text-muted)"}}>{k}</span>

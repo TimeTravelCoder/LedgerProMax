@@ -31,7 +31,7 @@ interface WorkspacePageProps {
   setSelectedTagsFilter: (tags: string[]) => void;
   extensionFilter: string;
   setExtensionFilter: (ext: string) => void;
-  tagDistribution: Record<string, number>;
+
   standardDirs: string[];
   workspaceDir: string;
   createFolderRoot: string;
@@ -65,7 +65,7 @@ export default function WorkspacePage({
   setSelectedTagsFilter,
   extensionFilter,
   setExtensionFilter,
-  tagDistribution,
+
   standardDirs,
   workspaceDir,
   createFolderRoot,
@@ -96,6 +96,7 @@ export default function WorkspacePage({
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
   const [editDescriptionInput, setEditDescriptionInput] = useState("");
   const [editTagsInput, setEditTagsInput] = useState<string[]>([]);
+  const [editStatusInput, setEditStatusInput] = useState("#待处理");
   const [newTagText, setNewTagText] = useState("");
 
   // Reset limit when query or filter changes
@@ -107,11 +108,16 @@ export default function WorkspacePage({
   useEffect(() => {
     if (selectedWorkspaceFile) {
       setEditDescriptionInput(selectedWorkspaceFile.description?.toString() || "");
-      setEditTagsInput(selectedWorkspaceFile.tags || []);
+      const currentTags = selectedWorkspaceFile.tags || [];
+      const statusTag = currentTags.find(t => ["#待处理", "#进行中", "#已完成", "#非常重要"].includes(t)) || "#待处理";
+      const otherTags = currentTags.filter(t => !["#待处理", "#进行中", "#已完成", "#非常重要"].includes(t));
+      setEditStatusInput(statusTag);
+      setEditTagsInput(otherTags);
       setIsEditingMetadata(false);
       setNewTagText("");
     } else {
       setEditDescriptionInput("");
+      setEditStatusInput("#待处理");
       setEditTagsInput([]);
       setIsEditingMetadata(false);
       setNewTagText("");
@@ -132,7 +138,8 @@ export default function WorkspacePage({
       });
 
       // 2. Save Tags
-      const cleanedTags = editTagsInput.map(t => t.trim()).filter(t => t.length > 0);
+      const combinedTags = [editStatusInput, ...editTagsInput];
+      const cleanedTags = combinedTags.map(t => t.trim()).filter(t => t.length > 0);
       await invoke("update_file_tags", {
         workspaceDir,
         filepath,
@@ -670,47 +677,6 @@ export default function WorkspacePage({
               ✕ 清空全部过滤
             </button>
           )}
-
-          {/* Hot tags list */}
-          <div style={{display: "flex", gap: "8px", flexWrap: "wrap", flex: 1, paddingBottom: "4px"}}>
-            {Object.entries(tagDistribution)
-              .filter(([tag]) => !["#待处理", "#进行中", "#已完成", "#非常重要"].includes(tag))
-              .slice(0, 5)
-              .map(([tag, count], idx) => {
-                const isActive = selectedTagsFilter.includes(tag);
-                return (
-                  <span 
-                    key={idx}
-                    onClick={() => {
-                      if (isActive) {
-                        setSelectedTagsFilter(selectedTagsFilter.filter(t => t !== tag));
-                      } else {
-                        setSelectedTagsFilter([...selectedTagsFilter, tag]);
-                      }
-                    }}
-                    style={{
-                      cursor: "pointer", 
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      padding: "6px 14px",
-                      borderRadius: "99px",
-                      background: isActive 
-                        ? (theme === "light" ? "#f59e0b" : "#d97706") 
-                        : (theme === "light" ? "#fef3c7" : "rgba(245, 158, 11, 0.1)"),
-                      color: isActive 
-                        ? "#fff" 
-                        : (theme === "light" ? "#d97706" : "#fbbf24"),
-                      border: isActive ? "1px solid transparent" : (theme === "light" ? "1px solid #fde68a" : "1px solid rgba(245, 158, 11, 0.2)"),
-                      transition: "all 0.2s ease",
-                      boxShadow: isActive ? "0 2px 8px rgba(245, 158, 11, 0.3)" : "none",
-                      whiteSpace: "nowrap"
-                    }}
-                  >
-                    {tag} ({count})
-                  </span>
-                );
-              })}
-          </div>
         </div>
 
         {/* 🆕 面包屑导航 */}
@@ -911,9 +877,52 @@ export default function WorkspacePage({
                     </div>
                   </div>
                   <div style={{display: "flex", alignItems: "center", gap: "12px", flexShrink: 0}}>
-                    {(file.tags || []).slice(0, 2).map((t, i) => (
-                      <span key={i} className="badge badge-success" style={{fontSize: "10px", textTransform: "none"}}>{t}</span>
-                    ))}
+                    {(() => {
+                      const tags = file.tags || [];
+                      const statusTag = tags.find(t => ["#待处理", "#进行中", "#已完成", "#非常重要"].includes(t));
+                      const otherTags = tags.filter(t => !["#待处理", "#进行中", "#已完成", "#非常重要"].includes(t));
+                      
+                      const elements = [];
+                      if (statusTag) {
+                        const cleanVal = statusTag.replace("#", "");
+                        const tagColors: Record<string, string> = { 已完成: "#10b981", 进行中: "#f59e0b", 待处理: "#ef4444", 非常重要: "#8b5cf6" };
+                        const color = tagColors[cleanVal] || "var(--color-primary)";
+                        elements.push(
+                          <span 
+                            key="status" 
+                            style={{
+                              fontSize: "9px", 
+                              fontWeight: 700, 
+                              padding: "1px 5px", 
+                              borderRadius: "4px", 
+                              background: `${color}15`, 
+                              color: color,
+                              border: `1px solid ${color}33`
+                            }}
+                          >
+                            {cleanVal}
+                          </span>
+                        );
+                      }
+                      if (otherTags.length > 0) {
+                        elements.push(
+                          <span 
+                            key="tag" 
+                            className="badge badge-success" 
+                            style={{
+                              fontSize: "10px", 
+                              textTransform: "none",
+                              background: theme === "light" ? "rgba(99, 102, 241, 0.05)" : "rgba(129, 140, 248, 0.08)",
+                              color: "var(--color-primary)",
+                              border: "1px solid rgba(99, 102, 241, 0.12)"
+                            }}
+                          >
+                            {otherTags[0]}
+                          </span>
+                        );
+                      }
+                      return elements;
+                    })()}
                     <span style={{fontSize: "11px", color: "var(--text-muted)"}}>{formatSize(file.file_size)}</span>
                   </div>
                 </div>
@@ -1088,9 +1097,53 @@ export default function WorkspacePage({
                       overflow: "hidden",
                       flexWrap: "wrap"
                     }}>
-                      {(file.tags || []).slice(0, 1).map((t, i) => (
-                        <span key={i} className="badge badge-success" style={{fontSize: "9px", textTransform: "none", padding: "1px 6px"}}>{t}</span>
-                      ))}
+                      {(() => {
+                        const tags = file.tags || [];
+                        const statusTag = tags.find(t => ["#待处理", "#进行中", "#已完成", "#非常重要"].includes(t));
+                        const otherTags = tags.filter(t => !["#待处理", "#进行中", "#已完成", "#非常重要"].includes(t));
+                        
+                        const elements = [];
+                        if (statusTag) {
+                          const cleanVal = statusTag.replace("#", "");
+                          const tagColors: Record<string, string> = { 已完成: "#10b981", 进行中: "#f59e0b", 待处理: "#ef4444", 非常重要: "#8b5cf6" };
+                          const color = tagColors[cleanVal] || "var(--color-primary)";
+                          elements.push(
+                            <span 
+                              key="status" 
+                              style={{
+                                fontSize: "9px", 
+                                fontWeight: 700, 
+                                padding: "1px 5px", 
+                                borderRadius: "4px", 
+                                background: `${color}15`, 
+                                color: color,
+                                border: `1px solid ${color}33`
+                              }}
+                            >
+                              {cleanVal}
+                            </span>
+                          );
+                        }
+                        if (otherTags.length > 0) {
+                          elements.push(
+                            <span 
+                              key="tag" 
+                              className="badge badge-success" 
+                              style={{
+                                fontSize: "9px", 
+                                textTransform: "none", 
+                                padding: "1px 6px",
+                                background: theme === "light" ? "rgba(99, 102, 241, 0.05)" : "rgba(129, 140, 248, 0.08)",
+                                color: "var(--color-primary)",
+                                border: "1px solid rgba(99, 102, 241, 0.12)"
+                              }}
+                            >
+                              {otherTags[0]}
+                            </span>
+                          );
+                        }
+                        return elements;
+                      })()}
                       <span style={{fontSize: "9px", color: "var(--text-muted)"}}>{formatSize(file.file_size)}</span>
                     </div>
                   </div>
@@ -1160,58 +1213,76 @@ export default function WorkspacePage({
               </div>
 
               <div>
-                <span style={{fontSize: "12px", color: "var(--text-muted)", display: "block", marginBottom: "4px"}}>所属标签</span>
+                <span style={{fontSize: "12px", color: "var(--text-muted)", display: "block", marginBottom: "4px"}}>所属标签与状态</span>
                 {isEditingMetadata ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {/* Available Tags list to click-select */}
-                    <div style={{
-                      display: "flex", 
-                      flexWrap: "wrap", 
-                      gap: "6px", 
-                      maxHeight: "140px",
-                      overflowY: "auto", 
-                      padding: "6px",
-                      borderRadius: "8px",
-                      background: theme === "light" ? "#f8fafc" : "rgba(255,255,255,0.02)",
-                      border: "1px solid var(--border-light)"
-                    }}>
-                      {(() => {
-                        // Dynamically fetch all unique tags from workspaceFiles and settings tags
-                        const allExistingTags = Array.from(new Set([
-                          ...workspaceFiles.flatMap(f => f.tags || []),
-                          "#待处理", "#进行中", "#已完成", "#非常重要", "#课程学习", "#学术科研", "#备份包", "#代码归档"
-                        ])).filter(t => t.length > 0);
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {/* Status Select Box */}
+                    <div>
+                      <span style={{fontSize: "11px", color: "var(--text-secondary)", display: "block", marginBottom: "4px"}}>当前状态</span>
+                      <select 
+                        value={editStatusInput} 
+                        onChange={(e) => setEditStatusInput(e.target.value)}
+                        className="input-field"
+                        style={{ width: "100%", height: "32px", fontSize: "12px", padding: "0 8px", borderRadius: "6px", border: "1px solid var(--border-light)", background: theme === "light" ? "#fff" : "rgba(0,0,0,0.2)", color: "var(--text-primary)" }}
+                      >
+                        <option value="#待处理">#待处理</option>
+                        <option value="#进行中">#进行中</option>
+                        <option value="#已完成">#已完成</option>
+                        <option value="#非常重要">#非常重要</option>
+                      </select>
+                    </div>
 
-                        return allExistingTags.map((tag, i) => {
-                          const isActive = editTagsInput.includes(tag);
-                          return (
-                            <span 
-                              key={i} 
-                              onClick={() => {
-                                if (isActive) {
-                                  setEditTagsInput(editTagsInput.filter(t => t !== tag));
-                                } else {
-                                  setEditTagsInput([...editTagsInput, tag]);
-                                }
-                              }}
-                              className={`badge`}
-                              style={{
-                                cursor: "pointer",
-                                textTransform: "none",
-                                fontSize: "10px",
-                                padding: "3px 8px",
-                                borderRadius: "99px",
-                                border: isActive ? "1px solid transparent" : "1px solid var(--border-light)",
-                                background: isActive ? "var(--color-primary)" : "transparent",
-                                color: isActive ? "#fff" : "var(--text-secondary)",
-                                transition: "all 0.15s ease"
-                              }}
-                            >
-                              {tag}
-                            </span>
-                          );
-                        });
-                      })()}
+                    {/* Available Tags list to click-select */}
+                    <div>
+                      <span style={{fontSize: "11px", color: "var(--text-secondary)", display: "block", marginBottom: "4px"}}>内容分类标签</span>
+                      <div style={{
+                        display: "flex", 
+                        flexWrap: "wrap", 
+                        gap: "6px", 
+                        maxHeight: "140px",
+                        overflowY: "auto", 
+                        padding: "6px",
+                        borderRadius: "8px",
+                        background: theme === "light" ? "#f8fafc" : "rgba(255,255,255,0.02)",
+                        border: "1px solid var(--border-light)"
+                      }}>
+                        {(() => {
+                          const allExistingTags = Array.from(new Set([
+                            ...workspaceFiles.flatMap(f => f.tags || []),
+                            "#课程学习", "#学术科研", "#备份包", "#代码归档"
+                          ])).filter(t => t.length > 0 && !["#待处理", "#进行中", "#已完成", "#非常重要"].includes(t));
+
+                          return allExistingTags.map((tag, i) => {
+                            const isActive = editTagsInput.includes(tag);
+                            return (
+                              <span 
+                                key={i} 
+                                onClick={() => {
+                                  if (isActive) {
+                                    setEditTagsInput(editTagsInput.filter(t => t !== tag));
+                                  } else {
+                                    setEditTagsInput([...editTagsInput, tag]);
+                                  }
+                                }}
+                                className={`badge`}
+                                style={{
+                                  cursor: "pointer",
+                                  textTransform: "none",
+                                  fontSize: "10px",
+                                  padding: "3px 8px",
+                                  borderRadius: "99px",
+                                  border: isActive ? "1px solid transparent" : "1px solid var(--border-light)",
+                                  background: isActive ? "var(--color-primary)" : "transparent",
+                                  color: isActive ? "#fff" : "var(--text-secondary)",
+                                  transition: "all 0.15s ease"
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            );
+                          });
+                        })()}
+                      </div>
                     </div>
 
                     {/* Dynamically add new custom tag input */}
@@ -1232,7 +1303,7 @@ export default function WorkspacePage({
                             const cleaned = newTagText.trim();
                             if (cleaned) {
                               const formatted = cleaned.startsWith("#") ? cleaned : `#${cleaned}`;
-                              if (!editTagsInput.includes(formatted)) {
+                              if (!["#待处理", "#进行中", "#已完成", "#非常重要"].includes(formatted) && !editTagsInput.includes(formatted)) {
                                 setEditTagsInput([...editTagsInput, formatted]);
                               }
                               setNewTagText("");
@@ -1247,7 +1318,7 @@ export default function WorkspacePage({
                           const cleaned = newTagText.trim();
                           if (cleaned) {
                             const formatted = cleaned.startsWith("#") ? cleaned : `#${cleaned}`;
-                            if (!editTagsInput.includes(formatted)) {
+                            if (!["#待处理", "#进行中", "#已完成", "#非常重要"].includes(formatted) && !editTagsInput.includes(formatted)) {
                               setEditTagsInput([...editTagsInput, formatted]);
                             }
                             setNewTagText("");
@@ -1261,14 +1332,61 @@ export default function WorkspacePage({
 
                     {/* Active selected tags indicator preview */}
                     <div style={{ fontSize: "10px", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      已勾选: {editTagsInput.length > 0 ? editTagsInput.join(", ") : "无"}
+                      已选分类: {editTagsInput.length > 0 ? editTagsInput.join(", ") : "无"}
                     </div>
                   </div>
                 ) : (
-                  <div style={{display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px"}}>
-                    {selectedWorkspaceFile.tags && selectedWorkspaceFile.tags.length > 0 ? selectedWorkspaceFile.tags.map((t, i) => (
-                      <span key={i} className="badge badge-success" style={{textTransform: "none", fontSize: "11px"}}>{t}</span>
-                    )) : <span style={{fontSize: "12px", color: "var(--text-muted)"}}>无</span>}
+                  <div style={{display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px"}}>
+                    {(() => {
+                      const tags = selectedWorkspaceFile.tags || [];
+                      const statusTag = tags.find(t => ["#待处理", "#进行中", "#已完成", "#非常重要"].includes(t));
+                      const otherTags = tags.filter(t => !["#待处理", "#进行中", "#已完成", "#非常重要"].includes(t));
+                      
+                      const elements = [];
+                      if (statusTag) {
+                        const cleanVal = statusTag.replace("#", "");
+                        const tagColors: Record<string, string> = { 已完成: "#10b981", 进行中: "#f59e0b", 待处理: "#ef4444", 非常重要: "#8b5cf6" };
+                        const color = tagColors[cleanVal] || "var(--color-primary)";
+                        elements.push(
+                          <span 
+                            key="status" 
+                            style={{
+                              fontSize: "11px", 
+                              fontWeight: 700, 
+                              padding: "2px 8px", 
+                              borderRadius: "99px", 
+                              background: `${color}15`, 
+                              color: color,
+                              border: `1px solid ${color}33`
+                            }}
+                          >
+                            状态: {cleanVal}
+                          </span>
+                        );
+                      }
+                      otherTags.forEach((t, i) => {
+                        elements.push(
+                          <span 
+                            key={`tag-${i}`} 
+                            className="badge badge-success" 
+                            style={{
+                              textTransform: "none", 
+                              fontSize: "11px",
+                              background: theme === "light" ? "rgba(99, 102, 241, 0.08)" : "rgba(129, 140, 248, 0.15)",
+                              color: "var(--color-primary)",
+                              border: "1px solid rgba(99, 102, 241, 0.18)"
+                            }}
+                          >
+                            {t}
+                          </span>
+                        );
+                      });
+                      
+                      if (elements.length === 0) {
+                        return <span style={{fontSize: "12px", color: "var(--text-muted)"}}>无</span>;
+                      }
+                      return elements;
+                    })()}
                   </div>
                 )}
               </div>
