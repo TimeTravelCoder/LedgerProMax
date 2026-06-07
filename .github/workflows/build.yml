@@ -136,6 +136,7 @@ jobs:
           draft: false
           prerelease: false
           make_latest: true
+          generate_release_notes: true
           files: |
             release/*.msi
             release/*.msi.sig
