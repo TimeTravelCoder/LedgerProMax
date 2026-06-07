@@ -344,6 +344,8 @@ export default function SettingsPage({
               const ok = item.key === "monitor" ? validation?.exists : validation?.writable;
               const emptyOptional = !item.required && !item.value.trim();
 
+              const isFullWidth = item.key === "workspace" || item.key === "monitor";
+
               if (item.key === "monitor") {
                 const pathsList = parseListInput(item.value);
                 return (
@@ -359,7 +361,7 @@ export default function SettingsPage({
                           display: "flex", 
                           flexWrap: "wrap", 
                           gap: "6px", 
-                          padding: "6px 12px",
+                          padding: "6px 12px", 
                           background: theme === "light" ? "rgba(0,0,0,0.02)" : "rgba(255,255,255,0.01)",
                           border: "1px solid var(--border-light)",
                           borderRadius: "8px",
@@ -472,7 +474,7 @@ export default function SettingsPage({
               }
 
               return (
-                <div key={item.key} className="settings-field">
+                <div key={item.key} className="settings-field" style={isFullWidth ? { gridColumn: "span 2" } : undefined}>
                   <label>{item.label}</label>
                   <div style={{ display: "flex", gap: "8px", width: "100%" }}>
                     <input

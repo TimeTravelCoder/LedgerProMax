@@ -95,6 +95,7 @@ jobs:
 
           python3 - <<PYEOF
           import json, os, sys
+          win_url = "${WIN_URL}".replace(" ", ".")
           data = {
             "version": "${VERSION}",
             "notes": "Ledger Pro Max ${TAG}",
@@ -102,7 +103,7 @@ jobs:
             "platforms": {
               "windows-x86_64": {
                 "signature": "${WIN_SIG}".strip(),
-                "url": "${WIN_URL}"
+                "url": win_url
               }
             }
           }
