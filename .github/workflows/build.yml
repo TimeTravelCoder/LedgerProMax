@@ -1,32 +1,28 @@
 name: Build & Release (Tag Triggered)
 
 # ============================================================
-# 🎯 触发方式：
-#   仅在推送版本标签时触发，例如：
-#     git tag v3.1.0
-#     git push origin v3.1.0
-#
-#   普通 git push 代码不会触发任何编译！
+# Trigger: Only fires when a version tag is pushed
+#   git tag v3.1.0
+#   git push origin v3.1.0
+# Normal branch pushes do NOT trigger a build.
 # ============================================================
 on:
   push:
     tags:
-      - 'v*.*.*'        # 匹配 v3.0.0 / v3.1.0 / v3.1.1 等
-  workflow_dispatch:    # 也支持在 Actions 页面手动触发
+      - 'v*.*.*'
+  workflow_dispatch:
 
 jobs:
   build-windows:
-    name: "🏗️ Build & Release ${{ github.ref_name }}"
+    name: "Build & Release ${{ github.ref_name }}"
     runs-on: windows-latest
     permissions:
       contents: write
 
     steps:
-      # ── 1. 检出代码 ──────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── 2. Node.js ───────────────────────────────────────────
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -36,7 +32,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # ── 3. Rust ──────────────────────────────────────────────
       - name: Setup Rust (stable)
         uses: dtolnay/rust-toolchain@stable
 
@@ -45,25 +40,21 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
-      # ── 4. 编译 + 自动签名 ───────────────────────────────────
       - name: Build & Sign Tauri App
         run: npm run tauri build
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      # ── 5. 读取版本号（从标签名） ────────────────────────────
       - name: Get version from tag
         id: version
         shell: bash
         run: |
-          TAG="${{ github.ref_name }}"          # e.g. v3.1.0
-          VERSION="${TAG#v}"                     # e.g. 3.1.0
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
           echo "tag=${TAG}"         >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Building: tag=${TAG}, version=${VERSION}"
 
-      # ── 6. 收集安装包 + 签名文件 ────────────────────────────
       - name: Collect release artifacts
         shell: bash
         run: |
@@ -74,9 +65,11 @@ jobs:
           cp "src-tauri/target/release/bundle/nsis/"*.exe.sig release/ 2>/dev/null || true
           echo "=== Artifacts ===" && ls -lh release/
 
-      # ── 7. 生成 updater.json（自动更新核心文件）──────────────
       - name: Generate updater.json
         shell: bash
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
@@ -84,7 +77,6 @@ jobs:
           BASE="https://github.com/${REPO}/releases/download/${TAG}"
           NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          # 优先 NSIS（体积更小），fallback MSI
           NSIS_FILE=$(ls release/*-setup.exe 2>/dev/null | head -1)
           NSIS_NAME=$(basename "$NSIS_FILE")
           NSIS_SIG=""
@@ -102,50 +94,44 @@ jobs:
           fi
 
           python3 - <<PYEOF
-          import json
+          import json, os, sys
           data = {
             "version": "${VERSION}",
-            "notes": "Ledger Pro Max ${TAG} — 见 GitHub Release Notes 获取更新详情",
+            "notes": "Ledger Pro Max ${TAG}",
             "pub_date": "${NOW}",
             "platforms": {
               "windows-x86_64": {
-                "signature": """${WIN_SIG}""".strip(),
+                "signature": "${WIN_SIG}".strip(),
                 "url": "${WIN_URL}"
               }
             }
           }
           with open("release/updater.json", "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-          print("=== updater.json ===")
-          print(json.dumps(data, ensure_ascii=False, indent=2))
+          print(json.dumps(data, indent=2))
           PYEOF
 
-      # ── 8. 创建 GitHub Release，上传所有产物 ─────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "👑 Ledger Pro Max ${{ steps.version.outputs.tag }}"
+          name: "Ledger Pro Max ${{ steps.version.outputs.tag }}"
           body: |
-            ## 👑 Ledger Pro Max ${{ steps.version.outputs.tag }}
+            ## Ledger Pro Max ${{ steps.version.outputs.tag }}
 
-            ### 📦 安装包
+            ### Download
 
-            | 文件 | 说明 |
-            |------|------|
-            | `*_x64-setup.exe` | **推荐** NSIS 安装向导 |
-            | `*_x64_zh-CN.msi` | WiX MSI 安装程序 |
+            | File | Description |
+            |------|-------------|
+            | `*_x64-setup.exe` | NSIS Installer (Recommended) |
+            | `*_x64_zh-CN.msi` | WiX MSI Installer |
 
-            ### 🔄 已安装旧版本？无需手动下载
+            ### Auto-Update
 
-            软件启动后 **3 秒内自动检测到新版本**，弹出提示后一键升级。
-
-            ### 🔧 全新安装
-
-            下载 `*-setup.exe` → 双击安装 → 启动即用
+            Existing users: the app checks for updates on startup and will prompt automatically.
 
             ---
-            > 🔨 提交：${{ github.sha }} · 分支：ProMax · 时间：${{ github.event.head_commit.timestamp }}
+            > Commit: ${{ github.sha }} | Branch: ProMax
           draft: false
           prerelease: false
           make_latest: true
