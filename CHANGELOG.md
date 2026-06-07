@@ -4,6 +4,15 @@
 
 ---
 
+## [v3.2.1] — 2026-06-07
+
+### 🐛 缺陷修复与体验优化
+
+- **优化热门标签栏** — 在工作空间界面的热门标签列表中过滤掉了状态型标签（如 `#待处理` 等），使标签展示更加专注于内容分类。
+- **防止检索逻辑冲突** — 解决了用户如果在下拉菜单中过滤了某种状态（如 `#待处理`），又在热门标签中点击其他状态标签（如 `#进行中`）导致 SQL 条件冲突而无法检索出文件的问题。
+
+---
+
 ## [v3.2.0] — 2026-06-07
 
 ### 🛡️ 安全性与稳定性加固 (DeepSeek 代码审查修复)
@@ -142,6 +151,7 @@
 
 ---
 
+[v3.2.1]: https://github.com/TimeTravelCoder/LedgerProMax/releases/tag/v3.2.1
 [v3.2.0]: https://github.com/TimeTravelCoder/LedgerProMax/releases/tag/v3.2.0
 [v3.1.1]: https://github.com/TimeTravelCoder/LedgerProMax/releases/tag/v3.1.1
 [v3.0.0]: https://github.com/TimeTravelCoder/LedgerProMax/releases/tag/v3.0.0

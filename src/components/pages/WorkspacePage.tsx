@@ -673,40 +673,43 @@ export default function WorkspacePage({
 
           {/* Hot tags list */}
           <div style={{display: "flex", gap: "8px", flexWrap: "wrap", flex: 1, paddingBottom: "4px"}}>
-            {Object.entries(tagDistribution).slice(0, 5).map(([tag, count], idx) => {
-              const isActive = selectedTagsFilter.includes(tag);
-              return (
-                <span 
-                  key={idx}
-                  onClick={() => {
-                    if (isActive) {
-                      setSelectedTagsFilter(selectedTagsFilter.filter(t => t !== tag));
-                    } else {
-                      setSelectedTagsFilter([...selectedTagsFilter, tag]);
-                    }
-                  }}
-                  style={{
-                    cursor: "pointer", 
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    padding: "6px 14px",
-                    borderRadius: "99px",
-                    background: isActive 
-                      ? (theme === "light" ? "#f59e0b" : "#d97706") 
-                      : (theme === "light" ? "#fef3c7" : "rgba(245, 158, 11, 0.1)"),
-                    color: isActive 
-                      ? "#fff" 
-                      : (theme === "light" ? "#d97706" : "#fbbf24"),
-                    border: isActive ? "1px solid transparent" : (theme === "light" ? "1px solid #fde68a" : "1px solid rgba(245, 158, 11, 0.2)"),
-                    transition: "all 0.2s ease",
-                    boxShadow: isActive ? "0 2px 8px rgba(245, 158, 11, 0.3)" : "none",
-                    whiteSpace: "nowrap"
-                  }}
-                >
-                  {tag} ({count})
-                </span>
-              );
-            })}
+            {Object.entries(tagDistribution)
+              .filter(([tag]) => !["#待处理", "#进行中", "#已完成", "#非常重要"].includes(tag))
+              .slice(0, 5)
+              .map(([tag, count], idx) => {
+                const isActive = selectedTagsFilter.includes(tag);
+                return (
+                  <span 
+                    key={idx}
+                    onClick={() => {
+                      if (isActive) {
+                        setSelectedTagsFilter(selectedTagsFilter.filter(t => t !== tag));
+                      } else {
+                        setSelectedTagsFilter([...selectedTagsFilter, tag]);
+                      }
+                    }}
+                    style={{
+                      cursor: "pointer", 
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      padding: "6px 14px",
+                      borderRadius: "99px",
+                      background: isActive 
+                        ? (theme === "light" ? "#f59e0b" : "#d97706") 
+                        : (theme === "light" ? "#fef3c7" : "rgba(245, 158, 11, 0.1)"),
+                      color: isActive 
+                        ? "#fff" 
+                        : (theme === "light" ? "#d97706" : "#fbbf24"),
+                      border: isActive ? "1px solid transparent" : (theme === "light" ? "1px solid #fde68a" : "1px solid rgba(245, 158, 11, 0.2)"),
+                      transition: "all 0.2s ease",
+                      boxShadow: isActive ? "0 2px 8px rgba(245, 158, 11, 0.3)" : "none",
+                      whiteSpace: "nowrap"
+                    }}
+                  >
+                    {tag} ({count})
+                  </span>
+                );
+              })}
           </div>
         </div>
 
