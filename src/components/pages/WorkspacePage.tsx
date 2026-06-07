@@ -15,6 +15,7 @@ import {
 import type { FileRecord } from "../../types";
 import { formatSize, getFileIcon } from "../../utils/fileUtils";
 import { invoke } from "@tauri-apps/api/core";
+import DuplicateFinder from "../DuplicateFinder";
 
 interface WorkspacePageProps {
   theme: "dark" | "light";
@@ -42,7 +43,7 @@ interface WorkspacePageProps {
   setSelectedWorkspaceFile: (file: FileRecord | null) => void;
   setPreviewFile: (file: FileRecord | null) => void;
   addLog: (log: string) => void;
-  showToast: (msg: string, type: "success" | "warning" | "error" | "info") => void;
+  showToast: (msg: string, type?: "success" | "warning" | "error" | "info", duration?: number) => void;
   setShowZipModal: (show: boolean) => void;
   checkedWorkspaceFiles: string[];
   setCheckedWorkspaceFiles: (files: string[]) => void;
@@ -89,6 +90,7 @@ export default function WorkspacePage({
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [listRenderLimit, setListRenderLimit] = useState(50);
   const [hoveredFileIdx, setHoveredFileIdx] = useState<number | null>(null);
+  const [workspaceSubTab, setWorkspaceSubTab] = useState<"files" | "duplicates">("files");
 
   // Metadata editor states
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
@@ -175,9 +177,54 @@ export default function WorkspacePage({
   });
 
   return (
-    <div style={{display: "grid", gridTemplateColumns: "220px minmax(0, 1fr) 320px", gap: "16px", height: "100%"}}>
-      {/* Left Column: Folders / Categories */}
-      <div className="workspace-left-rail">
+    <div style={{display: "flex", flexDirection: "column", height: "100%", gap: "16px"}}>
+      {/* Subtab Segmented Control */}
+      <div style={{
+        display: "flex",
+        background: theme === "light" ? "rgba(0, 0, 0, 0.03)" : "rgba(255, 255, 255, 0.03)",
+        padding: "4px",
+        borderRadius: "10px",
+        border: "1px solid var(--border-light)",
+        gap: "4px",
+        width: "fit-content",
+        flexShrink: 0
+      }}>
+        {[
+          { key: "files" as const, label: "🗂️ 文件浏览与分类检索" },
+          { key: "duplicates" as const, label: "🔍 智能查重清理中心" }
+        ].map(sub => (
+          <button
+            key={sub.key}
+            type="button"
+            onClick={() => setWorkspaceSubTab(sub.key)}
+            style={{
+              padding: "6px 20px",
+              borderRadius: "8px",
+              border: "none",
+              background: workspaceSubTab === sub.key
+                ? (theme === "light" ? "#fff" : "rgba(255, 255, 255, 0.08)")
+                : "transparent",
+              color: workspaceSubTab === sub.key
+                ? "var(--color-primary)"
+                : "var(--text-secondary)",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "all 0.15s ease"
+            }}
+          >
+            {sub.label}
+          </button>
+        ))}
+      </div>
+
+      {workspaceSubTab === "files" ? (
+        <div style={{display: "grid", gridTemplateColumns: "220px minmax(0, 1fr) 320px", gap: "16px", flex: 1, minHeight: 0}}>
+          {/* Left Column: Folders / Categories */}
+          <div className="workspace-left-rail">
         <div className="workspace-tree-header">
           <h3 style={{fontSize: "14px", fontWeight: 700, color: "var(--text-primary)"}}>分类目录树</h3>
           <button 
@@ -1392,6 +1439,18 @@ export default function WorkspacePage({
           </div>
         )}
       </div>
+    </div>
+      ) : (
+        <div style={{flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column"}}>
+          <DuplicateFinder 
+            workspaceDir={workspaceDir} 
+            onRefreshWorkspace={handleScanWorkspace} 
+            addLog={addLog} 
+            theme={theme}
+            showToast={showToast}
+          />
+        </div>
+      )}
     </div>
   );
 }

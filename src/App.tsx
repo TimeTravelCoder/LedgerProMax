@@ -4,7 +4,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import LiquidGlass from "./components/liquid-glass/LiquidGlass";
 import PreviewPanel from "./components/PreviewPanel";
-import DuplicateFinder from "./components/DuplicateFinder";
 import ZipArchiveModal from "./components/ZipArchiveModal";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -13,7 +12,6 @@ import {
   FolderOpen,
   ShieldCheck,
   Settings,
-  Sparkles,
   RotateCw,
   FolderPlus,
   FileText,
@@ -21,8 +19,7 @@ import {
   Bell,
   Plus,
   Edit3,
-  X,
-  Info
+  X
 } from "lucide-react";
 
 import type { FileRecord, BackupHistoryRecord, AutoRule, PathValidation, PathValidationMap } from "./types";
@@ -33,30 +30,22 @@ import InboxPage from "./components/pages/InboxPage";
 import WorkspacePage from "./components/pages/WorkspacePage";
 import BackupPage from "./components/pages/BackupPage";
 import SettingsPage from "./components/pages/SettingsPage";
-import AboutPage from "./components/pages/AboutPage";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "inbox" | "workspace" | "backup" | "settings" | "duplicates" | "about">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "inbox" | "workspace" | "backup" | "settings">("dashboard");
   const activeTabRef = useRef(activeTab);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
   const [theme, setTheme] = useState<"dark" | "light">((localStorage.getItem("theme") as "dark" | "light") || "light");
-//   const [settingsSubTab, setSettingsSubTab] = useState<"paths" | "tags" | "rules">("paths");
   // Track whether user is editing metadata mode
 
   // App State Restoration
-//   const [hoveredWeeklyIndex, setHoveredWeeklyIndex] = useState<number | null>(null);
-//   const [weeklyTooltipPos, setWeeklyTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const [newFolderInput, setNewFolderInput] = useState("");
   const [createFolderRoot, setCreateFolderRoot] = useState("01课程学习");
   const [createFolderSubpath, setCreateFolderSubpath] = useState("");
-//   const [version, setVersion] = useState("v1.0");
   const [selectedWorkspaceFile, setSelectedWorkspaceFile] = useState<FileRecord | null>(null);
   const selectedWorkspaceFileRef = useRef(selectedWorkspaceFile);
   useEffect(() => { selectedWorkspaceFileRef.current = selectedWorkspaceFile; }, [selectedWorkspaceFile]);
-//   const [ruleTestFilename, setRuleTestFilename] = useState<string>("report_final.pdf");
-//   const [tagSearchQuery, setTagSearchQuery] = useState<string>("");
-//   const [customTagInput, setCustomTagInput] = useState<string>("");
   const [checkedWorkspaceFiles, setCheckedWorkspaceFiles] = useState<string[]>([]);
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
   const [isCreateFolderExpanded, setIsCreateFolderExpanded] = useState(false);
@@ -82,8 +71,6 @@ export default function App() {
     { key: "paper", label: "学术论文模板 (日期_论文名)", pattern: "{date}_{topic}" },
     { key: "note", label: "个人笔记模板 (日期_笔记主题)", pattern: "{date}_{topic}" },
   ]);
-//   const [newTemplateLabel, setNewTemplateLabel] = useState("");
-//   const [newTemplatePattern, setNewTemplatePattern] = useState("");
 
   async function handleBatchImportToInbox(paths: string[]) {
     let successCount = 0;
@@ -148,12 +135,6 @@ export default function App() {
   const [selectedInboxFile, setSelectedInboxFile] = useState<FileRecord | null>(null);
 
   // State: Rename / Organize File Panel
-//   const [topicName, setTopicName] = useState("");
-//   const [fileStatus, setFileStatus] = useState("#待处理");
-//   const [remark, setRemark] = useState("");
-//   const [recommendedTags, setRecommendedTags] = useState<string[]>([]);
-//   const [selectedTemplate, setSelectedTemplate] = useState("regular");
-//   const [targetCategory, setTargetCategory] = useState("01课程学习");
 
   // State: Workspace Panel
   const [searchQuery, setSearchQuery] = useState("");
@@ -171,15 +152,8 @@ export default function App() {
   const [reorganizeModalShow, setReorganizeModalShow] = useState(false);
   const [reorganizeFileTarget, setReorganizeFileTarget] = useState<FileRecord | null>(null);
   const [reorganizeTargetDir, setReorganizeTargetDir] = useState<string>("");
-//   const [sortMethod, setSortMethod] = useState<"time_desc" | "time_asc" | "size_desc" | "size_asc" | "name_asc" | "name_desc">("time_desc");
-//   const [hoveredFileIdx, setHoveredFileIdx] = useState<number | null>(null);
 
   // State: View Mode Toggle & Metadata Editing
-//   const [workspaceViewMode, setWorkspaceViewMode] = useState<"list" | "grid">("list");
-//   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
-//   const [editDescriptionInput, setEditDescriptionInput] = useState("");
-//   const [editTagsInput, setEditTagsInput] = useState<string[]>([]);
-//   const [newTagText, setNewTagText] = useState("");
 
   const [workspaceFiles, setWorkspaceFiles] = useState<FileRecord[]>([]);
   const [allWorkspaceFiles, setAllWorkspaceFiles] = useState<FileRecord[]>([]);
@@ -191,15 +165,10 @@ export default function App() {
   // State: Backup Panel
   const [backupLog, setBackupLog] = useState<string[]>([]);
   const [backupHistory, setBackupHistory] = useState<BackupHistoryRecord[]>([]);
-//   const [isArchiving, setIsArchiving] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isCleaningDesktop, setIsCleaningDesktop] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
-//   const [inboxSort, setInboxSort] = useState<"name" | "size" | "time">("time");
-//   const [checkedInboxFiles, setCheckedInboxFiles] = useState<string[]>([]);
-//   const [inboxMultiMode, setInboxMultiMode] = useState(false);
   const [undoStack, setUndoStack] = useState<{action: string; filepath: string; timestamp: number}[]>([]);
-//   const [listRenderLimit, setListRenderLimit] = useState(50);
 
   // State: Global Status tags distribution
   const [tagDistribution, setTagDistribution] = useState<Record<string, number>>({});
@@ -226,20 +195,10 @@ export default function App() {
     { name: "图片素材", keywords: ["image", "photo", "截图"], extensions: [".png", ".jpg", ".jpeg"], target_prefix: "07", enabled: true },
   ]);
 
-//   const [multiSelectMode, setMultiSelectMode] = useState<boolean>(false);
   const [showZipModal, setShowZipModal] = useState<boolean>(false);
 
   // States for Editing in Settings Tab
-//   const [newTagInput, setNewTagInput] = useState<string>("");
-//   const [newTagGroup, setNewTagGroup] = useState<TagGroupKey>("primary");
-//   const [editingTag, setEditingTag] = useState<{ group: TagGroupKey; value: string } | null>(null);
-//   const [editingTagValue, setEditingTagValue] = useState<string>("");
 
-//   const [newRuleName, setNewRuleName] = useState<string>("");
-//   const [newRuleKeywords, setNewRuleKeywords] = useState<string>("");
-//   const [newRuleExtensions, setNewRuleExtensions] = useState<string>("");
-//   const [newRulePrefix, setNewRulePrefix] = useState<string>("01");
-//   const [editingRuleIndex, setEditingRuleIndex] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState<string>("");
 
@@ -258,7 +217,6 @@ export default function App() {
     cloud: null,
   });
 
-//   const [chosenTags, setChosenTags] = useState<string[]>([]);
 
   const standardDirs = useMemo(() => {
     return standardDirPresets[workspaceLang] || standardDirsZhFull;
@@ -622,7 +580,7 @@ const normalizeTag = (value: string) => {
       else if (ctrl && e.key === "2") { e.preventDefault(); setActiveTab("inbox"); }
       else if (ctrl && e.key === "3") { e.preventDefault(); setActiveTab("workspace"); }
       else if (ctrl && e.key === "4") { e.preventDefault(); setActiveTab("backup"); }
-      else if (ctrl && e.key === "5") { e.preventDefault(); setActiveTab("duplicates"); }
+      else if (ctrl && e.key === "5") { e.preventDefault(); setActiveTab("settings"); }
       else if (e.key === "Escape") { setIsCreateFolderExpanded(false); setIsCreateFileExpanded(false); setRenameModalShow(false); setReorganizeModalShow(false); setShowZipModal(false); }
       else if (e.key === "F2" && selFile && currentTab === "workspace") {
         e.preventDefault();
@@ -791,35 +749,7 @@ const normalizeTag = (value: string) => {
     return () => { cancelled = true; };
   }, [searchQuery, selectedCategory, selectedTagsFilter, statusFilter, extensionFilter, searchVersion]);
 
-  /*
-// Tag Recommendations & Rules Suggestion when selecting inbox file
-  useEffect(() => {
-    if (selectedInboxFile) {
-      const updateSuggestions = async () => {
-        // Recommend Tags
-        const tags: string[] = await invoke("recommend_tags", {
-          filename: selectedInboxFile.filename,
-          remark: remark,
-          activeTags: [],
-          topK: 3
-        });
-        setRecommendedTags(tags);
-        setChosenTags(tags.slice(0, 2)); // 默认自动预勾选前两个高频 AI 推荐标签
-
-        // Suggest category directory based on extension / keywords
-        const suggestion: [string, string] | null = await invoke("suggest_rule_target", {
-          filename: selectedInboxFile.filename,
-          autoRules: autoRulesState,
-          standardDirs
-        });
-        if (suggestion) {
-          setTargetCategory(suggestion[1]);
-        }
-      };
-      updateSuggestions();
-    }
-  }, [selectedInboxFile]);
-*/
+  
 
   const addLog = (msg: string) => {
     console.log(`[${new Date().toLocaleTimeString()}] ${msg}`);
@@ -869,69 +799,15 @@ const handleAddOrUpdateRule = () => {
   }
 */;
 
-  /*
-const handleEditRule = (idx: number) => {
-    const rule = autoRulesState[idx];
-    setEditingRuleIndex(idx);
-    setNewRuleName(rule.name);
-    setNewRuleKeywords(rule.keywords.join(", "));
-    setNewRuleExtensions(rule.extensions.join(", "));
-    setNewRulePrefix(rule.target_prefix);
-  }
-*/;
+  
 
-  /*
-const handleMoveRule = (idx: number, direction: -1 | 1) => {
-    setAutoRulesState(prev => {
-      const target = idx + direction;
-      if (target < 0 || target >= prev.length) return prev;
-      const next = [...prev];
-      [next[idx], next[target]] = [next[target], next[idx]];
-      return next;
-    });
-  }
-*/;
+  
 
-  /*
-const handleAddTag = () => {
-    const formatted = normalizeTag(newTagInput);
-    if (!formatted) return;
-    setTagsState(prev => ({
-      ...prev,
-      [newTagGroup]: prev[newTagGroup].includes(formatted) ? prev[newTagGroup] : [...prev[newTagGroup], formatted]
-    }));
-    setNewTagInput("");
-    addLog(`成功新增标签泡泡: ${formatted}`);
-  }
-*/;
+  
 
-  /*
-const handleStartEditTag = (group: TagGroupKey, value: string) => {
-    setEditingTag({ group, value });
-    setEditingTagValue(value);
-  }
-*/;
+  
 
-  /*
-const handleCommitTagEdit = () => {
-    if (!editingTag) return;
-    const nextValue = normalizeTag(editingTagValue);
-    if (!nextValue) return;
-
-    if (nextValue !== editingTag.value && tagsState[editingTag.group].includes(nextValue)) {
-      showToast(`标签 "${nextValue}" 已存在，请使用不同的名称。`, "warning");
-      return;
-    }
-
-    setTagsState(prev => ({
-      ...prev,
-      [editingTag.group]: prev[editingTag.group].map(tag => tag === editingTag.value ? nextValue : tag)
-    }));
-    addLog(`标签已重命名: ${editingTag.value} -> ${nextValue}`);
-    setEditingTag(null);
-    setEditingTagValue("");
-  }
-*/;
+  
 
   // Clear Desktop Non-Shortcut Files
   const handleCleanDesktop = async () => {
@@ -1027,120 +903,12 @@ const handleCommitTagEdit = () => {
   };
 
   // Get Formatted Name based on selected template
-  /*
-const getFormattedName = (originalName: string) => {
-    const dotIdx = originalName.lastIndexOf(".");
-    const ext = dotIdx > 0 ? originalName.substring(dotIdx) : "";
-    const today = new Date().toISOString().substring(0, 10).replace(/-/g, "");
-    const topic = topicName.trim() === "" ? "无主题" : topicName.trim();
-    
-    // Find active template
-    const activeTpl = namingTemplates.find(t => t.key === selectedTemplate);
-    if (activeTpl) {
-      const cleanStatus = fileStatus.replace("#", "");
-      let result = activeTpl.pattern;
-      result = result.replace(/{date}/g, today);
-      result = result.replace(/{topic}/g, topic);
-      result = result.replace(/{version}/g, version);
-      result = result.replace(/{status}/g, cleanStatus);
-      return `${result}${ext}`;
-    }
-
-    // Fallback if not found
-    const cleanStatus = fileStatus.replace("#", "");
-    return `${today}_${topic}_${version}_${cleanStatus}${ext}`;
-  }
-*/;
+  
 
   // Archive & Categorize Inbox File
-  /*
-const handleArchiveFile = async () => {
-    if (!selectedInboxFile || isArchiving) return;
-    setIsArchiving(true);
+  
 
-    try {
-      const formattedName = getFormattedName(selectedInboxFile.filename.toString());
-      const destRel = `${targetCategory}/${formattedName}`;
-
-      const finalRel: string = await invoke("organize_file", {
-        workspaceDir,
-        srcPath: `${workspaceDir}/${selectedInboxFile.filepath}`,
-        destRelPath: destRel,
-        newFilename: formattedName
-      });
-
-      const finalTags = [...chosenTags];
-      if (fileStatus && !finalTags.includes(fileStatus)) {
-        finalTags.push(fileStatus);
-      }
-
-      await invoke("update_file_tags", { workspaceDir, filepath: finalRel, tags: finalTags });
-      if (remark.trim() !== "") {
-        await invoke("update_file_description", { workspaceDir, filepath: finalRel, description: remark.trim() });
-      }
-
-      addLog(`文档归档成功: ${selectedInboxFile.filename} -> ${destRel}`);
-      showToast("归档成功！", "success");
-      setUndoStack(prev => [{action: `归档 ${selectedInboxFile.filename} → ${destRel}`, filepath: finalRel, timestamp: Date.now()}, ...prev].slice(0, 20));
-      // Auto-select next inbox file for continuous processing
-      const archivedPath = selectedInboxFile.filepath;
-      setSelectedInboxFile(null);
-      setTopicName("");
-      setRemark("");
-      setChosenTags([]);
-      setVersion("v1.0");
-      setFileStatus("#待处理");
-      await handleRefreshData();
-      // Select next file after refresh
-      setTimeout(() => {
-        setInboxFiles(prev => {
-          const remaining = prev.filter(f => f.filepath !== archivedPath);
-          if (remaining.length > 0) {
-            const next = remaining[0];
-            const nextDot = next.filename.toString().lastIndexOf(".");
-            setSelectedInboxFile(next);
-            setTopicName(nextDot > 0 ? next.filename.toString().substring(0, nextDot) : next.filename.toString());
-          }
-          return remaining;
-        });
-      }, 200);
-    } catch (err: any) {
-      addLog(`[错误] 归档失败: ${err}`);
-      showToast(`归档失败: ${err}`, "error");
-    } finally {
-      setIsArchiving(false);
-    }
-  }
-*/;
-
-  /*
-const handleArchiveFileDirect = async (file: FileRecord) => {
-    try {
-      const match = getRuleMatch(file.filename);
-      const destDir = match ? match.directory : (standardDirs.find(d => d !== inboxName) || "01课程学习");
-      const destRel = `${destDir}/${file.filename}`;
-
-      const finalRel: string = await invoke("organize_file", {
-        workspaceDir,
-        srcPath: `${workspaceDir}/${file.filepath}`,
-        destRelPath: destRel,
-        newFilename: file.filename
-      });
-
-      const finalTags = [...(file.tags || [])];
-      await invoke("update_file_tags", { workspaceDir, filepath: finalRel, tags: finalTags });
-      if (file.description) {
-        await invoke("update_file_description", { workspaceDir, filepath: finalRel, description: file.description });
-      }
-
-      addLog(`文档归档成功: ${file.filename} -> ${destRel}`);
-      setUndoStack(prev => [{action: `归档 ${file.filename} → ${destRel}`, filepath: finalRel, timestamp: Date.now()}, ...prev].slice(0, 20));
-    } catch (err: any) {
-      addLog(`[错误] 归档失败: ${file.filename}, ${err}`);
-      showToast(`归档失败: ${file.filename}, ${err}`, "error");
-    }
-  }
-*/;
+  
 
   // Delete File
   const handleDeleteFile = async (filepath: string) => {
@@ -1240,45 +1008,7 @@ const handleArchiveFileDirect = async (file: FileRecord) => {
   };
 
   // Save Metadata Execute
-  /*
-const handleSaveMetadata = async () => {
-    if (!selectedWorkspaceFile) return;
-    try {
-      const filepath = selectedWorkspaceFile.filepath.toString();
-      
-      // 1. Save Description
-      await invoke("update_file_description", {
-        workspaceDir,
-        filepath,
-        description: editDescriptionInput.trim()
-      });
-
-      // 2. Save Tags
-      const cleanedTags = editTagsInput.map(t => t.trim()).filter(t => t.length > 0);
-      await invoke("update_file_tags", {
-        workspaceDir,
-        filepath,
-        tags: cleanedTags
-      });
-
-      showToast("文档元数据修改成功！", "success");
-      addLog(`元数据修改成功: ${selectedWorkspaceFile.filename}`);
-      setIsEditingMetadata(false);
-
-      // 3. Atomically update local select target and refresh search list
-      const updatedFile = {
-        ...selectedWorkspaceFile,
-        description: editDescriptionInput.trim(),
-        tags: cleanedTags
-      };
-      setSelectedWorkspaceFile(updatedFile);
-      await handleScanWorkspace();
-    } catch (err: any) {
-      showToast(`保存失败: ${err.toString()}`, "error");
-      addLog(`[错误] 元数据保存失败: ${err.toString()}`);
-    }
-  }
-*/;
+  
 
   const formatSize = (bytes: number) => {
     if (bytes === 0) return "0 Bytes";
@@ -1288,25 +1018,7 @@ const handleSaveMetadata = async () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
-  /*
-const getWeeklyActivity = (allFiles: FileRecord[]) => {
-    const today = new Date();
-    const list = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(today.getDate() - i);
-      const label = `${d.getMonth() + 1}/${d.getDate()}`;
-      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime() / 1000;
-      const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime() / 1000;
-      const count = allFiles.filter(f => {
-        const fileTime = Number(f.modified_time);
-        return fileTime >= dayStart && fileTime <= dayEnd;
-      }).length;
-      list.push({ label, count });
-    }
-    return list;
-  }
-*/;
+  
 
   // --- SYSTEM DATA DASHBOARD CALCULATIONS ---
   /* const totalFiles = allWorkspaceFiles.length; */
@@ -1338,18 +1050,7 @@ const getWeeklyActivity = (allFiles: FileRecord[]) => {
     .slice(0, 5); */
   /* const maxTagCount = Math.max(...sortedTags.map(t => t[1]), 1); */
 
-  /*
-const getTagColor = (tag: string) => {
-    const value = tag.replace(/^#/, "").trim();
-    if (!value) return "#818cf8";
-    const colors = ["#818cf8", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#38bdf8", "#2dd4bf", "#f472b6", "#4ade80", "#fb923c"];
-    let sum = 0;
-    for (let i = 0; i < value.length; i++) {
-      sum += value.charCodeAt(i);
-    }
-    return colors[sum % colors.length];
-  }
-*/;
+  
 
   const handleSelectDir = async (setter: (val: string) => void) => {
     try {
@@ -1381,22 +1082,7 @@ const getTagColor = (tag: string) => {
     return { x, y, label: d.label, count: d.count };
   }); */
 
-  /*
-const getSplinePathString = (pts: {x: number, y: number}[]) => {
-    if (pts.length === 0) return "";
-    let d = `M ${pts[0].x} ${pts[0].y}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i];
-      const p1 = pts[i + 1];
-      const cpX1 = p0.x + (p1.x - p0.x) / 2;
-      const cpY1 = p0.y;
-      const cpX2 = p0.x + (p1.x - p0.x) / 2;
-      const cpY2 = p1.y;
-      d += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p1.x} ${p1.y}`;
-    }
-    return d;
-  }
-*/;
+  
 
   /* const linePathStr = getSplinePathString(splinePoints); */
   /* const areaPathStr = linePathStr ? `${linePathStr} L ${splinePoints[splinePoints.length - 1].x} ${svgHeight - 30} L ${splinePoints[0].x} ${svgHeight - 30} Z` : ""; */
@@ -1450,46 +1136,7 @@ const getSplinePathString = (pts: {x: number, y: number}[]) => {
   const fileSubpathError = createFileSubpath.trim() ? validateWorkspacePathParts(createFileSubpath, { allowSlash: true }) : "";
   const fileValidationMessage = fileNameError || fileSubpathError || (fileDepth > 4 ? `目录深度 ${fileDepth}/4，超过工作区规范。` : "");
   const canCreateFile = !fileValidationMessage && fileDepth >= 2 && fileDepth <= 4;
-  /*
-const proMaxSignals = [
-    {
-      icon: Inbox,
-      label: "Pro Inbox",
-      value: unorganizedCount,
-      unit: "待处理",
-      detail: "外部文件自动落入收集箱",
-      accent: "var(--color-warning)",
-      onClick: () => setActiveTab("inbox")
-    },
-    {
-      icon: Sparkles,
-      label: "AI 归档",
-      value: archiveCoverage,
-      unit: "%",
-      detail: "标签覆盖率与语义命名",
-      accent: "var(--color-success)",
-      onClick: () => setActiveTab("workspace")
-    },
-    {
-      icon: ShieldCheck,
-      label: "3-2-1 Backup",
-      value: backupScore,
-      unit: "分",
-      detail: "本地盘、外置盘、云端三层保护",
-      accent: backupScore >= 100 ? "var(--color-success)" : (backupScore >= 70 ? "var(--color-warning)" : "var(--color-danger)"),
-      onClick: () => setActiveTab("backup")
-    },
-    {
-      icon: Layers,
-      label: "Workspace",
-      value: totalFiles,
-      unit: "文件",
-      detail: "结构化分类工作空间",
-      accent: "var(--color-primary)",
-      onClick: () => setActiveTab("workspace")
-    }
-  ];
-*/
+  
 
 
   return (
@@ -1543,28 +1190,12 @@ const proMaxSignals = [
             <span>3-2-1 备份管家</span>
           </div>
 
-          <div 
-            onClick={() => setActiveTab("duplicates")} 
-            className={`menu-item ${activeTab === "duplicates" ? "active" : ""}`}
-          >
-            <Sparkles size={18} />
-            <span>智能查重整理</span>
-          </div>
-
           <div
             onClick={() => setActiveTab("settings")}
             className={`menu-item ${activeTab === "settings" ? "active" : ""}`}
           >
             <Settings size={18} />
             <span>控制面板与设置</span>
-          </div>
-
-          <div
-            onClick={() => setActiveTab("about")}
-            className={`menu-item ${activeTab === "about" ? "active" : ""}`}
-          >
-            <Info size={18} />
-            <span>关于 Pro Max</span>
           </div>
         </div>
 
@@ -1594,9 +1225,7 @@ const proMaxSignals = [
             {activeTab === "inbox" && "Pro Inbox 智能投递收集箱"}
             {activeTab === "workspace" && "Pro Workspace 分类工作空间"}
             {activeTab === "backup" && "Pro Backup 3-2-1 增量镜像"}
-            {activeTab === "duplicates" && "Pro Cleaner 智能查重清理中心"}
             {activeTab === "settings" && "Pro Control 控制面板与系统配置"}
-            {activeTab === "about" && "About 关于 Ledger Pro Max"}
           </div>
 
           <div className="header-actions">
@@ -1881,27 +1510,9 @@ const proMaxSignals = [
               setBackupCloudDir={setBackupCloudDir}
               addLog={addLog}
               showToast={showToast}
-            />
-          )}
-
-          {/* 5. ABOUT TAB */}
-          {activeTab === "about" && (
-            <AboutPage
-              theme={theme}
-              workspaceDir={workspaceDir}
               isCheckingUpdate={isCheckingUpdate}
               handleCheckForUpdates={handleCheckForUpdates}
-            />
-          )}
-
-          {/* 5. DUPLICATES TAB */}
-          {activeTab === "duplicates" && (
-            <DuplicateFinder 
-              workspaceDir={workspaceDir} 
-              onRefreshWorkspace={handleRefreshData} 
-              addLog={addLog} 
-              theme={theme}
-              showToast={showToast}
+              workspaceDir={workspaceDir}
             />
           )}
 
@@ -1927,7 +1538,6 @@ const proMaxSignals = [
           onClose={() => {
             setShowZipModal(false);
             setCheckedWorkspaceFiles([]);
-//            setMultiSelectMode(false);
           }}
           onSuccess={() => {
             handleRefreshData();

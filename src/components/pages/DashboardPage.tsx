@@ -13,7 +13,7 @@ import { formatSize } from "../../utils/fileUtils";
 import { invoke } from "@tauri-apps/api/core";
 
 interface DashboardPageProps {
-  setActiveTab: (tab: "dashboard" | "inbox" | "workspace" | "backup" | "settings" | "duplicates" | "about") => void;
+  setActiveTab: (tab: "dashboard" | "inbox" | "workspace" | "backup" | "settings") => void;
   theme: "dark" | "light";
   allWorkspaceFiles: FileRecord[];
   inboxFiles: FileRecord[];

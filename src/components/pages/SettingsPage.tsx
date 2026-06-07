@@ -12,6 +12,7 @@ import {
 import type { AutoRule, TagGroupKey, PathValidationMap } from "../../types";
 import { standardDirPresets } from "../../utils/fileUtils";
 import { invoke } from "@tauri-apps/api/core";
+import AboutPage from "./AboutPage";
 
 interface SettingsPageProps {
   theme: "dark" | "light";
@@ -49,6 +50,9 @@ interface SettingsPageProps {
   setBackupCloudDir: (dir: string) => void;
   addLog: (log: string) => void;
   showToast: (msg: string, type: "success" | "warning" | "error" | "info") => void;
+  isCheckingUpdate: boolean;
+  handleCheckForUpdates: (force: boolean) => void;
+  workspaceDir: string;
 }
 
 export default function SettingsPage({
@@ -86,10 +90,13 @@ export default function SettingsPage({
   setBackupDiskDir,
   setBackupCloudDir,
   addLog,
-  showToast
+  showToast,
+  isCheckingUpdate,
+  handleCheckForUpdates,
+  workspaceDir
 }: SettingsPageProps) {
   // Sub-navigation
-  const [settingsSubTab, setSettingsSubTab] = useState<"paths" | "tags" | "rules">("paths");
+  const [settingsSubTab, setSettingsSubTab] = useState<"paths" | "tags" | "rules" | "about">("paths");
 
   // Tag editing inputs
   const [newTagInput, setNewTagInput] = useState("");
@@ -284,7 +291,8 @@ export default function SettingsPage({
         {[
           { key: "paths" as const, label: "🌐 基础路径与初始化" },
           { key: "tags" as const, label: "🏷️ 可视化标签池" },
-          { key: "rules" as const, label: "🤖 整理与命名规则" }
+          { key: "rules" as const, label: "🤖 整理与命名规则" },
+          { key: "about" as const, label: "ℹ️ 关于 Ledger Pro Max" }
         ].map(sub => (
           <button
             key={sub.key}
@@ -772,53 +780,64 @@ export default function SettingsPage({
         </>
       )}
 
-      <div className="settings-savebar">
-        <div className={`settings-status ${saveStatus === "error" ? "warn" : saveStatus === "saved" ? "ok" : ""}`}>
-          {saveMessage || "修改配置后请保存，保存会同步工作空间与监听规则。"}
+      {settingsSubTab === "about" && (
+        <AboutPage
+          theme={theme}
+          workspaceDir={workspaceDir}
+          isCheckingUpdate={isCheckingUpdate}
+          handleCheckForUpdates={handleCheckForUpdates}
+        />
+      )}
+
+      {settingsSubTab !== "about" && (
+        <div className="settings-savebar">
+          <div className={`settings-status ${saveStatus === "error" ? "warn" : saveStatus === "saved" ? "ok" : ""}`}>
+            {saveMessage || "修改配置后请保存，保存会同步工作空间与监听规则。"}
+          </div>
+          <div style={{display: "flex", gap: "8px"}}>
+            <button className="btn" onClick={async () => {
+              try {
+                const config = await invoke("load_config");
+                const configJson = JSON.stringify(config, null, 2);
+                await invoke("select_export_config_file", { configJson });
+                showToast("配置已成功导出！", "success");
+              } catch (err: any) {
+                if (err !== "USER_CANCELLED") {
+                  showToast(`导出失败: ${err}`, "error");
+                }
+              }
+            }} style={{fontSize: "11px", padding: "6px 12px"}}>📤 导出</button>
+            <button className="btn" onClick={async () => {
+              try {
+                const text: string = await invoke("select_import_config_file");
+                if (text && text !== "USER_CANCELLED") {
+                  const config = JSON.parse(text);
+                  await invoke("save_config", { config });
+                  showToast("配置已成功导入！正在重载...", "success");
+                  setTimeout(() => window.location.reload(), 1000);
+                }
+              } catch (err: any) {
+                if (err !== "USER_CANCELLED") {
+                  showToast(`导入失败: ${err}`, "error");
+                }
+              }
+            }} style={{fontSize: "11px", padding: "6px 12px"}}>📥 导入</button>
+            <button className="btn danger" onClick={() => {
+              if (!window.confirm("确定要重置所有配置为默认值吗？此操作不可撤销。\n注意：您的当前工作空间与多目录监听路径将被保留。")) return;
+              setBackupDiskDir(""); setBackupCloudDir("");
+              setTempBackupDiskDir(""); setTempBackupCloudDir("");
+              setTagsState({primary: [], secondary: [], status: ["#待处理", "#进行中", "#已完成", "#非常重要"]});
+              setAutoRulesState([]); setNamingTemplates(prev => prev.filter(t => !t.key.startsWith("custom_")));
+              setWorkspaceLang("zh-full"); setTheme("light");
+              showToast("配置已成功重置，请点击保存生效。", "warning");
+            }} style={{fontSize: "11px", padding: "6px 12px"}}>🔄 重置</button>
+            <button className="btn btn-primary" onClick={handleSaveConfig} disabled={saveStatus === "saving"}>
+              <Save size={16} />
+              {saveStatus === "saving" ? "保存中..." : "保存并热加载"}
+            </button>
+          </div>
         </div>
-        <div style={{display: "flex", gap: "8px"}}>
-          <button className="btn" onClick={async () => {
-            try {
-              const config = await invoke("load_config");
-              const configJson = JSON.stringify(config, null, 2);
-              await invoke("select_export_config_file", { configJson });
-              showToast("配置已成功导出！", "success");
-            } catch (err: any) {
-              if (err !== "USER_CANCELLED") {
-                showToast(`导出失败: ${err}`, "error");
-              }
-            }
-          }} style={{fontSize: "11px", padding: "6px 12px"}}>📤 导出</button>
-          <button className="btn" onClick={async () => {
-            try {
-              const text: string = await invoke("select_import_config_file");
-              if (text && text !== "USER_CANCELLED") {
-                const config = JSON.parse(text);
-                await invoke("save_config", { config });
-                showToast("配置已成功导入！正在重载...", "success");
-                setTimeout(() => window.location.reload(), 1000);
-              }
-            } catch (err: any) {
-              if (err !== "USER_CANCELLED") {
-                showToast(`导入失败: ${err}`, "error");
-              }
-            }
-          }} style={{fontSize: "11px", padding: "6px 12px"}}>📥 导入</button>
-          <button className="btn danger" onClick={() => {
-            if (!window.confirm("确定要重置所有配置为默认值吗？此操作不可撤销。\n注意：您的当前工作空间与多目录监听路径将被保留。")) return;
-            setBackupDiskDir(""); setBackupCloudDir("");
-            setTempBackupDiskDir(""); setTempBackupCloudDir("");
-            setTagsState({primary: [], secondary: [], status: ["#待处理", "#进行中", "#已完成", "#非常重要"]});
-            setAutoRulesState([]); setNamingTemplates(prev => prev.filter(t => !t.key.startsWith("custom_")));
-            setWorkspaceLang("zh-full"); setTheme("light");
-            showToast("配置已成功重置，请点击保存生效。", "warning");
-          }} style={{fontSize: "11px", padding: "6px 12px"}}>🔄 重置</button>
-          <button className="btn btn-primary" onClick={handleSaveConfig} disabled={saveStatus === "saving"}>
-            <Save size={16} />
-            {saveStatus === "saving" ? "保存中..." : "保存并热加载"}
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
