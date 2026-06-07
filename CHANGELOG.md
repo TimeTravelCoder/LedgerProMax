@@ -4,6 +4,31 @@
 
 ---
 
+## [v3.2.0] — 2026-06-07
+
+### 🛡️ 安全性与稳定性加固 (DeepSeek 代码审查修复)
+
+- **数据库连接池缓存** — 使用 `lazy_static` 缓存 `rusqlite::Connection`，并实现支持 Deref/DerefMut 的 `CachedConnection`，提升 SQLite 读写吞吐并消除文件连接锁冲突。
+- **防止 SQL 注入** — 重构数据库更新接口 `mark_as_backed_up`，移除动态字符串拼接，全部改用预处理静态 SQL 参数化绑定。
+- **文件归档安全逃脱锁** — 针对重命名自增循环设定 `counter > 10000` 保护，彻底规避极端环境下死循环导致线程锁死及 CPU 跑满。
+- **灾备配置备份** — 反序列化损坏的 `.config.json` 时，自动备份损坏版本为 `.config.json.bak` 再回退默认配置，保护用户历史数据。
+- **深度递归监控** — 升级多目录文件监控器为 `Recursive` 深度递归监视，完美感知监控目录下深层子文件夹的文件落地。
+- **前端去硬编码与前置校验** — 彻底清除 React 状态中默认的 `Ming` 用户硬编码路径，改为后端在启动时动态加载系统主目录；保存配置前对输入路径增加绝对路径合法性校验与空值提示拦截器。
+- **GitHub 自动化 CI** — 新建 `.github/workflows/ci.yml`，在 push 或 PR 时对前端 Linter、TypeScript 类型、Rust 单元测试及 Clippy 规范自动运行。
+
+---
+
+## [v3.1.1] — 2026-06-07
+
+### 🎨 界面优化与更新修复
+
+- **合并冗余板块** — 将“关于”合并至控制面板设置子页，将“智能查重”内化合并至工作空间顶部选项卡，侧边栏精简为 5 大主板块。
+- **界面比例拓宽** — 移除设置页与关于页最大宽度限制，将路径配置网格调整为跨列满幅，视觉更加舒展开阔。
+- **修复更新器 404 故障** — 修复 GitHub/CI 在上传含有空格的安装包名称时会被替换为点号导致本地检测到更新但下载报 404 的问题。
+- **重置过滤逻辑优化** — 修复清空工作空间多维过滤时错误重置左侧所选目录节点的 Bug。
+
+---
+
 ## [v3.0.0] — 2026-06-07
 
 ### 🏗️ 架构重构
@@ -117,6 +142,8 @@
 
 ---
 
+[v3.2.0]: https://github.com/TimeTravelCoder/LedgerProMax/releases/tag/v3.2.0
+[v3.1.1]: https://github.com/TimeTravelCoder/LedgerProMax/releases/tag/v3.1.1
 [v3.0.0]: https://github.com/TimeTravelCoder/LedgerProMax/releases/tag/v3.0.0
 [v2.2.1]: https://github.com/TimeTravelCoder/LedgerProMax/releases/tag/v2.2.1
 [v2.2.0]: https://github.com/TimeTravelCoder/LedgerProMax/releases/tag/v2.2.0
