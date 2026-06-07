@@ -102,7 +102,7 @@ impl WatcherManager {
             let p = PathBuf::from(&p_str);
             if p.exists() && p.is_dir() {
                 if let Ok(canonical) = p.canonicalize() {
-                    let _ = watcher.watch(&canonical, RecursiveMode::NonRecursive);
+                    let _ = watcher.watch(&canonical, RecursiveMode::Recursive);
                     registered_paths.push(canonical);
                 }
             }

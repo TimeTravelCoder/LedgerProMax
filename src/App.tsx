@@ -108,22 +108,22 @@ export default function App() {
   };
 
   // Global Workspace Configuration
-  const [workspaceDir, setWorkspaceDir] = useState<string>("C:\\Users\\Ming\\Desktop\\Ledger Pro Max\\Workspace");
+  const [workspaceDir, setWorkspaceDir] = useState<string>("");
   const workspaceDirRef = useRef(workspaceDir);
   useEffect(() => { workspaceDirRef.current = workspaceDir; }, [workspaceDir]);
   const [workspaceLang, setWorkspaceLang] = useState<string>("zh-full");
   const inboxName = (standardDirPresets[workspaceLang] || standardDirsZhFull)[0] || "00收集箱";
   const inboxNameRef = useRef(inboxName);
   useEffect(() => { inboxNameRef.current = inboxName; }, [inboxName]);
-  const [monitoredDirs, setMonitoredDirs] = useState<string>("C:\\Users\\Ming\\Downloads");
-  const [backupDiskDir, setBackupDiskDir] = useState<string>("D:\\LedgerBackup\\Disk");
-  const [backupCloudDir, setBackupCloudDir] = useState<string>("D:\\LedgerBackup\\Cloud");
+  const [monitoredDirs, setMonitoredDirs] = useState<string>("");
+  const [backupDiskDir, setBackupDiskDir] = useState<string>("");
+  const [backupCloudDir, setBackupCloudDir] = useState<string>("");
 
   // Temp states for Settings tab editing (decouples from global core logic and watchers during keystroke input)
-  const [tempWorkspaceDir, setTempWorkspaceDir] = useState<string>("C:\\Users\\Ming\\Desktop\\Ledger Pro Max\\Workspace");
-  const [tempMonitoredDirs, setTempMonitoredDirs] = useState<string>("C:\\Users\\Ming\\Downloads");
-  const [tempBackupDiskDir, setTempBackupDiskDir] = useState<string>("D:\\LedgerBackup\\Disk");
-  const [tempBackupCloudDir, setTempBackupCloudDir] = useState<string>("D:\\LedgerBackup\\Cloud");
+  const [tempWorkspaceDir, setTempWorkspaceDir] = useState<string>("");
+  const [tempMonitoredDirs, setTempMonitoredDirs] = useState<string>("");
+  const [tempBackupDiskDir, setTempBackupDiskDir] = useState<string>("");
+  const [tempBackupCloudDir, setTempBackupCloudDir] = useState<string>("");
 
   // State: Notification
   const [notification, setNotification] = useState<{ show: boolean; name: string; size: number; filepath: string } | null>(null);
@@ -676,6 +676,51 @@ const normalizeTag = (value: string) => {
   };
 
   const handleSaveConfig = async () => {
+    // 1. 前端路径空值校验与合法性前置验证
+    const pathPattern = /^[a-zA-Z]:\\|^\/|^\\\\/;
+    
+    if (!tempWorkspaceDir.trim()) {
+      showToast("工作空间路径不能为空，请配置有效的工作区文件夹！", "warning");
+      setSaveStatus("error");
+      setSaveMessage("保存失败：工作空间路径不能为空");
+      return;
+    }
+    if (!pathPattern.test(tempWorkspaceDir)) {
+      showToast("工作空间路径格式不正确，必须是绝对路径！", "warning");
+      setSaveStatus("error");
+      setSaveMessage("保存失败：工作空间路径必须是绝对路径");
+      return;
+    }
+
+    if (!tempMonitoredDirs.trim()) {
+      showToast("监控目录不能为空，请配置至少一个监控文件夹（如 Downloads 文件夹）！", "warning");
+      setSaveStatus("error");
+      setSaveMessage("保存失败：监控目录不能为空");
+      return;
+    }
+    const monitoredPaths = tempMonitoredDirs.split(",").map(p => p.trim()).filter(p => p.length > 0);
+    for (const p of monitoredPaths) {
+      if (!pathPattern.test(p)) {
+        showToast(`监控目录 "${p}" 格式不正确，必须是绝对路径！`, "warning");
+        setSaveStatus("error");
+        setSaveMessage("保存失败：监控目录必须是绝对路径");
+        return;
+      }
+    }
+
+    if (tempBackupDiskDir && !pathPattern.test(tempBackupDiskDir)) {
+      showToast("磁盘备份路径格式不正确，必须是绝对路径！", "warning");
+      setSaveStatus("error");
+      setSaveMessage("保存失败：磁盘备份路径必须是绝对路径");
+      return;
+    }
+    if (tempBackupCloudDir && !pathPattern.test(tempBackupCloudDir)) {
+      showToast("云端备份路径格式不正确，必须是绝对路径！", "warning");
+      setSaveStatus("error");
+      setSaveMessage("保存失败：云端备份路径必须是绝对路径");
+      return;
+    }
+
     try {
       const config = {
         workspace_dir: tempWorkspaceDir || "",

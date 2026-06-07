@@ -64,6 +64,9 @@ impl FileManager {
                 let parent = dest.parent().unwrap();
                 let mut counter = 1;
                 loop {
+                    if counter > 10000 {
+                        return Err("冲突处理重试次数过多，已被安全终止。请检查目标文件夹是否存在异常。".to_string());
+                    }
                     let candidate_name = format!("{}_{}{}", stem, counter, ext);
                     let candidate_dest = parent.join(candidate_name);
                     if !candidate_dest.exists() {
@@ -533,6 +536,9 @@ impl FileManager {
             let parent = dest.parent().unwrap();
             let mut counter = 1;
             loop {
+                if counter > 10000 {
+                    return Err("归档冲突重命名重试次数过多，已被安全终止。".to_string());
+                }
                 let candidate_name = format!("{}_{}{}", stem, counter, ext);
                 let candidate_dest = parent.join(&candidate_name);
                 if !candidate_dest.exists() {
@@ -744,5 +750,17 @@ impl FileManager {
             .collect();
 
         Ok(duplicate_groups)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_path() {
+        assert_eq!(normalize_path(Path::new("a/b/../c")), PathBuf::from("a/c"));
+        assert_eq!(normalize_path(Path::new("a/./b")), PathBuf::from("a/b"));
+        assert_eq!(normalize_path(Path::new("/a/b/c/../../d")), PathBuf::from("/a/d"));
     }
 }

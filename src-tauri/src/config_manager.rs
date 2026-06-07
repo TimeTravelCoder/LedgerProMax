@@ -155,10 +155,13 @@ impl ConfigManager {
                     &raw_bytes[..]
                 };
                 if let Ok(content) = std::str::from_utf8(content_bytes) {
-                    if let Ok(config) = serde_json::from_str::<AppConfig>(content) {
-                        return config;
-                    } else {
-                        eprintln!("[ConfigManager] Failed to parse config JSON, using default.");
+                    match serde_json::from_str::<AppConfig>(content) {
+                        Ok(config) => return config,
+                        Err(e) => {
+                            eprintln!("[ConfigManager] Failed to parse config JSON: {}. Making a backup.", e);
+                            let backup_path = path.with_extension("json.bak");
+                            let _ = fs::copy(&path, &backup_path);
+                        }
                     }
                 }
             }

@@ -3,6 +3,30 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::Local;
+use std::sync::Mutex;
+
+lazy_static::lazy_static! {
+    static ref INITIALIZED_DBS: Mutex<std::collections::HashSet<PathBuf>> = Mutex::new(std::collections::HashSet::new());
+    static ref CONNECTION_CACHE: Mutex<HashMap<PathBuf, Connection>> = Mutex::new(HashMap::new());
+}
+
+pub struct CachedConnection<'a> {
+    guard: std::sync::MutexGuard<'a, HashMap<PathBuf, Connection>>,
+    db_path: PathBuf,
+}
+
+impl<'a> std::ops::Deref for CachedConnection<'a> {
+    type Target = Connection;
+    fn deref(&self) -> &Self::Target {
+        self.guard.get(&self.db_path).unwrap()
+    }
+}
+
+impl<'a> std::ops::DerefMut for CachedConnection<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.guard.get_mut(&self.db_path).unwrap()
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FileRecord {
@@ -83,16 +107,35 @@ pub struct DatabaseManager {
 impl DatabaseManager {
     pub fn new<P: AsRef<Path>>(workspace_dir: P) -> Self {
         let db_dir = workspace_dir.as_ref();
-        std::fs::create_dir_all(db_dir).unwrap_or_default();
         let db_path = db_dir.join(".docman.db");
-        let manager = DatabaseManager { db_path };
-        manager.init_db().unwrap_or_default();
+        
+        let is_initialized = {
+            let initialized = INITIALIZED_DBS.lock().unwrap();
+            initialized.contains(&db_path)
+        };
+        
+        let manager = DatabaseManager { db_path: db_path.clone() };
+        
+        if !is_initialized {
+            let _ = std::fs::create_dir_all(db_dir);
+            let _ = manager.init_db();
+            let mut initialized = INITIALIZED_DBS.lock().unwrap();
+            initialized.insert(db_path);
+        }
+        
         manager
     }
 
-    fn get_conn(&self) -> Result<Connection> {
-        let conn = Connection::open(&self.db_path)?;
-        Ok(conn)
+    fn get_conn(&self) -> Result<CachedConnection<'_>> {
+        let mut cache = CONNECTION_CACHE.lock().unwrap();
+        if !cache.contains_key(&self.db_path) {
+            let conn = Connection::open(&self.db_path)?;
+            cache.insert(self.db_path.clone(), conn);
+        }
+        Ok(CachedConnection {
+            guard: cache,
+            db_path: self.db_path.clone(),
+        })
     }
 
     fn init_db(&self) -> Result<()> {
@@ -483,12 +526,14 @@ impl DatabaseManager {
     pub fn mark_as_backed_up(&self, rel_paths: Vec<String>, backup_type: &str) -> Result<()> {
         let conn = self.get_conn()?;
         let now_str = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-        let field = if backup_type == "disk" { "backup_disk_status" } else { "backup_cloud_status" };
         
-        let mut stmt = conn.prepare(&format!(
-            "UPDATE files SET {} = 1, last_backup_time = ? WHERE filepath = ?",
-            field
-        ))?;
+        let query = if backup_type == "disk" {
+            "UPDATE files SET backup_disk_status = 1, last_backup_time = ? WHERE filepath = ?"
+        } else {
+            "UPDATE files SET backup_cloud_status = 1, last_backup_time = ? WHERE filepath = ?"
+        };
+        
+        let mut stmt = conn.prepare(query)?;
         
         for path in rel_paths {
             stmt.execute(params![now_str, path])?;
@@ -523,5 +568,24 @@ impl DatabaseManager {
             });
         }
         Ok(history)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_pinyin_char() {
+        assert_eq!(get_pinyin_char('中'), 'z');
+        assert_eq!(get_pinyin_char('国'), 'g');
+        assert_eq!(get_pinyin_char('a'), 'a');
+        assert_eq!(get_pinyin_char('1'), '1');
+    }
+
+    #[test]
+    fn test_get_pinyin_initials() {
+        assert_eq!(get_pinyin_initials("中国"), "zg");
+        assert_eq!(get_pinyin_initials("Tauri"), "tauri");
     }
 }
