@@ -643,10 +643,9 @@ export default function WorkspacePage({
             <option value="name_desc">文件名 Z-A</option>
           </select>
 
-          {(searchQuery.trim() !== "" || statusFilter !== "" || selectedTagsFilter.length > 0 || extensionFilter !== "" || selectedCategory !== null) && (
+          {(searchQuery.trim() !== "" || statusFilter !== "" || selectedTagsFilter.length > 0 || extensionFilter !== "") && (
             <button
               onClick={() => {
-                setSelectedCategory(null);
                 setSearchQuery("");
                 setStatusFilter("");
                 setExtensionFilter("");
@@ -824,7 +823,7 @@ export default function WorkspacePage({
               <div style={{display: "flex", gap: "10px", marginTop: "20px"}}>
                 <button 
                   className="btn" 
-                  onClick={() => { setSelectedCategory(null); setSearchQuery(""); setStatusFilter(""); setExtensionFilter(""); setSelectedTagsFilter([]); }}
+                  onClick={() => { setSearchQuery(""); setStatusFilter(""); setExtensionFilter(""); setSelectedTagsFilter([]); }}
                   style={{
                     padding: "6px 14px",
                     fontSize: "11px",
