@@ -18,7 +18,7 @@ fn normalize_path(path: &Path) -> PathBuf {
         match component {
             std::path::Component::ParentDir => {
                 // pop the last normal/root component; stay at root if nothing to pop
-                if components.last().map_or(false, |c| {
+                if components.last().is_some_and(|c| {
                     matches!(c, std::path::Component::Normal(_) | std::path::Component::RootDir)
                 }) {
                     components.pop();
@@ -82,7 +82,7 @@ impl FileManager {
         // (e.g. Desktop on C: → Workspace on E:) where fs::rename returns "cross-device link" error.
         if let Err(rename_err) = fs::rename(src, &dest) {
             use std::io::ErrorKind;
-            let cross_device = rename_err.raw_os_error().map_or(false, |code| {
+            let cross_device = rename_err.raw_os_error().is_some_and(|code| {
                 // Windows: ERROR_NOT_SAME_DEVICE = 17
                 // Linux/POSIX: EXDEV = 18
                 code == 17 || code == 18
@@ -566,7 +566,7 @@ impl FileManager {
 
         // Cross-volume safe move: try rename, fall back to copy+delete
         if let Err(rename_err) = fs::rename(src, &dest) {
-            let cross_device = rename_err.raw_os_error().map_or(false, |c| c == 17 || c == 18)
+            let cross_device = rename_err.raw_os_error().is_some_and(|c| c == 17 || c == 18)
                 || rename_err.kind() == std::io::ErrorKind::Other;
             if cross_device {
                 fs::copy(src, &dest).map_err(|e| format!("跨卷复制失败: {}", e))?;
@@ -578,12 +578,12 @@ impl FileManager {
 
         let new_rel_path = dest.strip_prefix(&ws_root).map_err(|_| "路径解析失败".to_string())?.to_string_lossy().replace("\\", "/");
 
-        if src_is_inside && src_rel_path.is_some() {
-            let src_rel = src_rel_path.unwrap();
-            if db.get_file_info(&src_rel).unwrap().is_none() && src_stat.is_some() {
-                let (size, mtime) = src_stat.unwrap();
-                let src_fname = src.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
-                let _ = db.sync_file_metadata(&src_rel, src_fname, size, mtime);
+        if let (true, Some(src_rel)) = (src_is_inside, src_rel_path) {
+            if db.get_file_info(&src_rel).unwrap().is_none() {
+                if let Some((size, mtime)) = src_stat {
+                    let src_fname = src.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
+                    let _ = db.sync_file_metadata(&src_rel, src_fname, size, mtime);
+                }
             }
             db.rename_file_record(&src_rel, &new_rel_path, &final_filename).map_err(|e| e.to_string())?;
         } else {
@@ -675,7 +675,7 @@ impl FileManager {
         // Delete source files physically and from DB
         let mut count = 0;
         for (src_abs, rel_path) in &source_paths {
-            if let Ok(_) = fs::remove_file(src_abs) {
+            if fs::remove_file(src_abs).is_ok() {
                 let _ = db.delete_file_record(rel_path);
                 count += 1;
             }

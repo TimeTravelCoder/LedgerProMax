@@ -1,117 +1,37 @@
-# 🤝 贡献指南 — Ledger Pro Max
+# 贡献指南
 
-感谢你对 Ledger Pro Max 的关注！本文档说明如何参与项目贡献。
+主开发分支为 `ProMax`，当前发布目标为 Windows。架构和首次上手见 [README](README.md)，具体步骤见 [开发流程教程](开发流程教程.md)，发布由 [发布操作手册](发布操作手册.md) 管理。
 
----
+## 开发与提交
 
-## 📋 贡献方式
+1. 从最新 `ProMax` 创建 `feature/...`、`fix/...` 或 `docs/...` 分支。
+2. 使用 `npm ci` 安装依赖；桌面开发用 `npm run dev:desktop`。`npm run dev` 仅适合前端页面开发。
+3. 为涉及文件操作、数据库、备份等行为的修改补充有意义的测试，使用临时数据验证。
+4. 运行下面的检查，审阅差异后提交相关文件，创建面向 `ProMax` 的 PR。
 
-- 🐛 **提交 Bug 报告** — 发现问题请在 [Issues](https://github.com/TimeTravelCoder/LedgerProMax/issues) 提交
-- 💡 **功能建议** — 有好想法欢迎开 Issue 讨论
-- 🔧 **代码贡献** — Fork 仓库，开发完成后提交 Pull Request
-- 📖 **文档完善** — 修正错误、补充说明
-
----
-
-## 🚀 开发环境搭建
-
-### 必需工具
-
-```bash
-# Windows
-winget install OpenJS.NodeJS.LTS       # Node.js 22+
-winget install Rustlang.Rustup         # Rust stable
-winget install GitHub.cli              # GitHub CLI
-winget install Microsoft.VisualStudio.2022.BuildTools  # C++ 编译工具链
-
-# 安装完成后
-rustup default stable
+```powershell
+npm run version:check
+npm run test:workflow
+npm run lint
+npm run build
+cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo test --locked --manifest-path src-tauri/Cargo.toml
 ```
 
-### 克隆并启动
+只检查 TypeScript 时用 `npm run typecheck`。检查必须逐条成功，不能以最后一条命令成功代替全部成功。功能修改还需在 Windows Tauri 桌面窗口验收相关行为。
 
-```bash
-git clone https://github.com/TimeTravelCoder/LedgerProMax.git
-cd LedgerProMax
-git checkout ProMax
-npm install
-npm run dev    # 启动开发模式
-```
+PR 描述包含修改原因、最终行为和验证结果；CI 成功并完成审阅后合并。签名私钥只用于发布，贡献者无需持有或上传。依赖变更提交锁文件，普通开发不要删除锁文件。
 
----
+版本修改使用 `npm run version:sync -- X.Y.Z`，关于页版本自动读取，不需要手工改文本。
 
-## 🌿 分支规范
+## 提交规范
 
-| 分支 | 用途 |
-|------|------|
-| `ProMax` | 主分支，只接受稳定代码 |
-| `feature/xxx` | 新功能开发 |
-| `fix/xxx` | Bug 修复 |
+使用 `feat: ...`、`fix: ...`、`docs: ...`、`refactor: ...`、`test: ...`、`chore: ...` 或 `ci: ...`，描述具体变化。
 
-**操作流程：**
+## 问题反馈
 
-```bash
-# 1. 从 ProMax 创建功能分支
-git checkout -b feature/我的新功能 ProMax
+提供应用版本、操作系统、复现步骤、预期与实际行为，必要时附经脱敏的日志或截图。不要上传私钥、个人资料或真实备份文件。
 
-# 2. 开发并提交
-git add -A
-git commit -m "feat: 添加XXX功能"
+## 许可证
 
-# 3. 推送并提交 PR
-git push origin feature/我的新功能
-# 然后在 GitHub 上提交 Pull Request 到 ProMax
-```
-
----
-
-## 📝 Commit 规范
-
-遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)：
-
-```
-类型: 简短描述（不超过 50 字）
-
-可选的详细说明（换行后写）
-```
-
-| 类型 | 场景 |
-|------|------|
-| `feat` | 新功能 |
-| `fix` | Bug 修复 |
-| `refactor` | 重构（不改变功能）|
-| `style` | 格式调整 |
-| `docs` | 文档更新 |
-| `chore` | 构建 / 工具 / 依赖 |
-| `ci` | CI/CD 配置 |
-| `perf` | 性能优化 |
-
----
-
-## ✅ 提交 PR 前检查清单
-
-```
-[ ] TypeScript 零错误：npx tsc --noEmit
-[ ] 功能在开发模式下测试通过
-[ ] 新功能已更新对应文档
-[ ] Commit 信息遵循规范
-[ ] 未包含敏感信息（密钥、密码等）
-```
-
----
-
-## 🐛 提交 Bug 报告
-
-请包含以下信息：
-
-1. **软件版本**（关于页面查看）
-2. **操作系统**（Windows 10 / Windows 11）
-3. **复现步骤**（具体操作顺序）
-4. **期望行为** vs **实际行为**
-5. **截图或录屏**（如有）
-
----
-
-## 📄 License
-
-贡献的代码将以 MIT 许可证发布。
+项目 README 声明 MIT；当前仓库尚缺少 LICENSE 文件，应由维护者确认版权信息后补充。

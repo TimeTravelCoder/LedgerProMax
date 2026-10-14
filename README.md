@@ -38,7 +38,7 @@ Ledger Pro Max 是一款基于 **Tauri v2 + Rust + React** 构建的本地桌面
 
 ### 方式二：自动更新
 
-已安装旧版本？启动软件后 **3 秒内自动检测新版本**，弹出提示后一键升级，无需手动下载。
+已安装旧版本？启动软件后约 **3 秒开始检查新版本**，弹出提示后一键升级，无需手动下载。
 
 ---
 
@@ -184,8 +184,8 @@ LedgerProMax/
 
 | 工具 | 版本要求 |
 |------|---------|
-| Node.js | >= 22 |
-| Rust | >= 1.80 (stable) |
+| Node.js | >= 22.12，推荐受支持的 LTS |
+| Rust | stable，与 CI 工具链一致 |
 | 操作系统 | Windows 10/11 |
 
 ### 快速开始
@@ -197,11 +197,15 @@ cd LedgerProMax
 git checkout ProMax
 
 # 安装依赖
-npm install
+npm ci
 
 # 启动开发模式（前端热更新 + Tauri 桌面窗口）
-npm run dev
+npm run dev:desktop
 ```
+
+`npm run dev` 只启动前端服务器，普通浏览器不支持 Tauri IPC。Windows 还需安装 Build Tools 的 C++ 桌面工作负载、Windows SDK 和 WebView2 Runtime。
+
+提交前执行 `npm run version:check`、`npm run test:workflow`、`npm run lint`、`npm run build` 以及 Rust Clippy 和测试。完整步骤见 [开发流程教程](开发流程教程.md#4-提交前检查)。
 
 ### 分支说明
 
@@ -217,9 +221,10 @@ npm run dev
 详见 [发布操作手册.md](发布操作手册.md)，核心是：
 
 ```bash
-# 修改四处版本号后：
-git tag v3.x.x
-git push origin v3.x.x   # 触发 GitHub Actions 自动编译发布
+# 同步版本并更新 CHANGELOG，完成检查和 PR 合并
+npm run version:sync -- 3.2.4
+npm run version:check -- --tag v3.2.4
+# 随后按发布手册检查工作区、创建并推送标签
 ```
 
 ---

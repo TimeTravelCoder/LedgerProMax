@@ -1,27 +1,56 @@
-name: Build & Release (Tag Triggered)
+name: Build & Release
 
-# ============================================================
-# Trigger: Only fires when a version tag is pushed
-#   git tag v3.1.0
-#   git push origin v3.1.0
-# Normal branch pushes do NOT trigger a build.
-# ============================================================
+# Normal pushes run ci.yml; this workflow publishes version tags.
+# Manual reruns must select an existing version tag, not a branch.
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    tags: ['v*.*.*']
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build-windows:
-    name: "Build & Release ${{ github.ref_name }}"
+    name: Build & Release ${{ github.ref_name }}
     runs-on: windows-latest
+    timeout-minutes: 45
     permissions:
       contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Require a version tag
+        shell: bash
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_REF" =~ ^refs/tags/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
+            echo 'Select an existing vX.Y.Z tag for a manual release.' >&2
+            exit 1
+          }
+
+      - name: Reject an already published release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG;
+            try {
+              await github.rest.repos.getReleaseByTag({ ...context.repo, tag });
+            } catch (error) {
+              if (error.status === 404) return;
+              throw error;
+            }
+            core.setFailed(`Release ${tag} already exists; do not replace published artifacts.`);
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -32,114 +61,64 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Validate release version and frontend
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          npm run version:check -- --tag "$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:workflow
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run lint
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Setup Rust (stable)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Rust build cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
 
-      - name: Build & Sign Tauri App
-        run: npm run tauri build
+      - name: Validate Rust
+        run: |
+          cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --manifest-path src-tauri/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and sign Tauri app
+        run: npm run tauri -- build --bundles nsis,msi -- --locked
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      - name: Get version from tag
-        id: version
-        shell: bash
-        run: |
-          TAG="${{ github.ref_name }}"
-          VERSION="${TAG#v}"
-          echo "tag=${TAG}"         >> $GITHUB_OUTPUT
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Collect release artifacts
-        shell: bash
-        run: |
-          mkdir -p release
-          cp "src-tauri/target/release/bundle/msi/"*.msi      release/ 2>/dev/null || true
-          cp "src-tauri/target/release/bundle/msi/"*.msi.sig  release/ 2>/dev/null || true
-          cp "src-tauri/target/release/bundle/nsis/"*.exe     release/ 2>/dev/null || true
-          cp "src-tauri/target/release/bundle/nsis/"*.exe.sig release/ 2>/dev/null || true
-          echo "=== Artifacts ===" && ls -lh release/
-
-      - name: Generate updater.json
-        shell: bash
+      - name: Prepare and validate release artifacts
         env:
-          PYTHONUTF8: "1"
-          PYTHONIOENCODING: "utf-8"
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          VERSION="${{ steps.version.outputs.version }}"
-          REPO="${{ github.repository }}"
-          BASE="https://github.com/${REPO}/releases/download/${TAG}"
-          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-          NSIS_FILE=$(ls release/*-setup.exe 2>/dev/null | head -1)
-          NSIS_NAME=$(basename "$NSIS_FILE")
-          NSIS_SIG=""
-          [ -f "release/${NSIS_NAME}.sig" ] && NSIS_SIG=$(cat "release/${NSIS_NAME}.sig")
-
-          MSI_FILE=$(ls release/*.msi 2>/dev/null | head -1)
-          MSI_NAME=$(basename "$MSI_FILE")
-          MSI_SIG=""
-          [ -f "release/${MSI_NAME}.sig" ] && MSI_SIG=$(cat "release/${MSI_NAME}.sig")
-
-          if [ -n "$NSIS_SIG" ]; then
-            WIN_URL="${BASE}/${NSIS_NAME}"; WIN_SIG="${NSIS_SIG}"
-          else
-            WIN_URL="${BASE}/${MSI_NAME}"; WIN_SIG="${MSI_SIG}"
-          fi
-
-          python3 - <<PYEOF
-          import json, os, sys
-          win_url = "${WIN_URL}".replace(" ", ".")
-          data = {
-            "version": "${VERSION}",
-            "notes": "Ledger Pro Max ${TAG}",
-            "pub_date": "${NOW}",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "${WIN_SIG}".strip(),
-                "url": win_url
-              }
-            }
-          }
-          with open("release/updater.json", "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-          print(json.dumps(data, indent=2))
-          PYEOF
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: npm run release:prepare -- "$env:RELEASE_TAG" "$env:RELEASE_REPOSITORY"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "Ledger Pro Max ${{ steps.version.outputs.tag }}"
+          tag_name: ${{ github.ref_name }}
+          name: Ledger Pro Max ${{ github.ref_name }}
           body: |
-            ## Ledger Pro Max ${{ steps.version.outputs.tag }}
-
-            ### Download
-
-            | File | Description |
-            |------|-------------|
-            | `*_x64-setup.exe` | NSIS Installer (Recommended) |
-            | `*_x64_zh-CN.msi` | WiX MSI Installer |
-
-            ### Auto-Update
-
-            Existing users: the app checks for updates on startup and will prompt automatically.
-
-            ---
-            > Commit: ${{ github.sha }} | Branch: ProMax
+            Windows installers: NSIS (*-setup.exe) and MSI (*.msi).
+            Updater signatures and SHA256SUMS are included.
+            Commit: ${{ github.sha }}
           draft: false
           prerelease: false
           make_latest: true
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             release/*.msi
             release/*.msi.sig
             release/*.exe
             release/*.exe.sig
             release/updater.json
+            release/SHA256SUMS
