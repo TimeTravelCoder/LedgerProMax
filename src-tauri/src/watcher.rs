@@ -52,11 +52,7 @@ impl WatcherManager {
             move |res: notify::Result<notify::Event>| {
                 if let Ok(event) = res {
                     // Match generic Create or Modify events (including ModifyKind::Name/Rename)
-                    let is_file_event = match event.kind {
-                        EventKind::Create(_) => true,
-                        EventKind::Modify(_) => true,
-                        _ => false,
-                    };
+                    let is_file_event = matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_));
 
                     if is_file_event {
                         for path in event.paths {

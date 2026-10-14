@@ -68,10 +68,10 @@ async fn search_files(
                 
                 match ext_filter.as_str() {
                     "pdf" => ext == "pdf",
-                    "image" => vec!["png", "jpg", "jpeg", "gif", "webp", "svg"].contains(&ext.as_str()),
-                    "doc" => vec!["doc", "docx", "txt", "md", "xlsx", "xls", "csv", "ppt", "pptx"].contains(&ext.as_str()),
-                    "code" => vec!["py", "js", "ts", "tsx", "jsx", "json"].contains(&ext.as_str()),
-                    "archive" => vec!["zip", "rar", "7z", "tar", "gz"].contains(&ext.as_str()),
+                    "image" => ["png", "jpg", "jpeg", "gif", "webp", "svg"].contains(&ext.as_str()),
+                    "doc" => ["doc", "docx", "txt", "md", "xlsx", "xls", "csv", "ppt", "pptx"].contains(&ext.as_str()),
+                    "code" => ["py", "js", "ts", "tsx", "jsx", "json"].contains(&ext.as_str()),
+                    "archive" => ["zip", "rar", "7z", "tar", "gz"].contains(&ext.as_str()),
                     _ => true,
                 }
             });

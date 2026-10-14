@@ -363,26 +363,26 @@ impl DatabaseManager {
                 .map(|t| t.trim().to_lowercase().trim_start_matches('#').to_string())
                 .collect();
                 
-            records = records.into_iter().filter(|r| {
+            records.retain(|r| {
                 let file_tags: std::collections::HashSet<String> = r.tags.split(',')
                     .filter(|t| !t.trim().is_empty())
                     .map(|t| t.trim().to_lowercase().trim_start_matches('#').to_string())
                     .collect();
                 norm_selected.is_subset(&file_tags)
-            }).collect();
+            });
         }
 
         // 2. Precise Status Filtering
         if let Some(ref status) = file_status {
             let norm_status = status.trim().to_lowercase().trim_start_matches('#').to_string();
             if !norm_status.is_empty() {
-                records = records.into_iter().filter(|r| {
+                records.retain(|r| {
                     let file_tags: std::collections::HashSet<String> = r.tags.split(',')
                         .filter(|t| !t.trim().is_empty())
                         .map(|t| t.trim().to_lowercase().trim_start_matches('#').to_string())
                         .collect();
                     file_tags.contains(&norm_status)
-                }).collect();
+                });
             }
         }
 

@@ -47,7 +47,7 @@ impl BackupManager {
             }
         }
 
-        fs::create_dir_all(&dest_path).map_err(|e| e.to_string())?;
+        fs::create_dir_all(dest_path).map_err(|e| e.to_string())?;
 
         let mut copied_files_count = 0;
         let mut copied_bytes_count = 0;

@@ -8,7 +8,13 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "dev:desktop": "tauri dev",
+    "typecheck": "tsc -b",
+    "version:check": "node scripts/version.mjs",
+    "version:sync": "node scripts/version.mjs --sync",
+    "release:prepare": "node scripts/prepare-release.mjs",
+    "test:workflow": "node --test scripts/workflow.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
