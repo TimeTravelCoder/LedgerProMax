@@ -8,10 +8,11 @@
 
 [![Release](https://img.shields.io/github/v/release/TimeTravelCoder/LedgerProMax?style=flat-square&color=gold&label=最新版本)](https://github.com/TimeTravelCoder/LedgerProMax/releases/latest)
 [![Platform](https://img.shields.io/badge/平台-Windows%2010%2F11-blue?style=flat-square&logo=windows)](https://github.com/TimeTravelCoder/LedgerProMax/releases/latest)
-[![License](https://img.shields.io/badge/许可证-MIT-green?style=flat-square)](LICENSE)
-[![Build](https://img.shields.io/github/actions/workflow/status/TimeTravelCoder/LedgerProMax/build.yml?style=flat-square&label=自动构建)](https://github.com/TimeTravelCoder/LedgerProMax/actions)
+[![License](https://img.shields.io/badge/许可证-MIT-green?style=flat-square)](#license)
+[![CI](https://img.shields.io/github/actions/workflow/status/TimeTravelCoder/LedgerProMax/ci.yml?branch=ProMax&style=flat-square&label=CI)](https://github.com/TimeTravelCoder/LedgerProMax/actions/workflows/ci.yml)
+[![Build](https://img.shields.io/github/actions/workflow/status/TimeTravelCoder/LedgerProMax/build.yml?style=flat-square&label=发布构建)](https://github.com/TimeTravelCoder/LedgerProMax/actions/workflows/build.yml)
 
-[📦 下载安装](#-快速安装) · [✨ 功能介绍](#-核心功能) · [🛠️ 开发指南](#️-开发者指南) · [📋 更新日志](CHANGELOG.md)
+[📦 下载安装](#installation) · [✨ 功能介绍](#features) · [🛠️ 开发指南](#development) · [🤖 AI 更新](#ai-updates) · [📋 文档索引](#documentation)
 
 </div>
 
@@ -24,6 +25,8 @@ Ledger Pro Max 是一款基于 **Tauri v2 + Rust + React** 构建的本地桌面
 它不是云盘，不是网盘，是运行在你电脑上的**本地文件指挥台**，所有数据完全私有。
 
 ---
+
+<a id="installation"></a>
 
 ## 📦 快速安装
 
@@ -41,6 +44,8 @@ Ledger Pro Max 是一款基于 **Tauri v2 + Rust + React** 构建的本地桌面
 已安装旧版本？启动软件后约 **3 秒开始检查新版本**，弹出提示后一键升级，无需手动下载。
 
 ---
+
+<a id="features"></a>
 
 ## ✨ 核心功能
 
@@ -61,22 +66,22 @@ Ledger Pro Max 是一款基于 **Tauri v2 + Rust + React** 构建的本地桌面
 - **命名模板** — 支持 `{date}_{topic}_{version}_{status}` 等变量替换
 
 ### 📂 分类工作空间（Workspace）
-预置 12 个标准目录，覆盖全场景：
+提供中文/英文以及完整/精简/基础工作区预设。默认中文完整预设包含以下 12 个目录：
 
 | 目录 | 用途 |
 |------|------|
-| `00_收集箱` | 待整理文件临时存放 |
-| `01_课程学习` | 课件、讲义、课程笔记 |
-| `02_课题研究` | 研究资料、实验数据 |
-| `03_项目管理` | 项目文档、源码仓库 |
-| `04_代码仓库` | 脚本、代码片段 |
-| `05_学术论文` | 论文 PDF、参考文献 |
-| `06_知识笔记` | 个人知识库、读书笔记 |
-| `07_常用资源` | 素材、模板、工具 |
-| `08_演示汇报` | PPT、演讲稿 |
-| `09_个人简历` | 简历、证书扫描件 |
-| `10_归档区` | 已完成项目 ZIP 保险箱 |
-| `99_临时缓冲` | 临时文件中转 |
+| `00收集箱` | 待整理文件临时存放 |
+| `01课程学习` | 课件、讲义、课程笔记 |
+| `02课题研究` | 研究资料、实验数据 |
+| `03项目管理` | 项目文档、源码仓库 |
+| `04代码仓库` | 脚本、代码片段 |
+| `05学术论文` | 论文 PDF、参考文献 |
+| `06知识笔记` | 个人知识库、读书笔记 |
+| `07常用资源` | 素材、模板、工具 |
+| `08演示汇报` | PPT、演讲稿 |
+| `09个人简历` | 简历、证书扫描件 |
+| `10归档区` | 已完成项目 ZIP 保险箱 |
+| `99临时缓冲` | 临时文件中转 |
 
 **工作空间核心能力：**
 - 拼音首字母搜索（输入 `bg` 匹配 `报告.pdf`）
@@ -102,7 +107,7 @@ Ledger Pro Max 是一款基于 **Tauri v2 + Rust + React** 构建的本地桌面
 三种精度模式：
 - **文件名查重** — 忽略大小写匹配
 - **文件大小查重** — 按体积分组
-- **SHA-256 精确查重** — 内容级别去重，零误报
+- **SHA-256 精确查重** — 按文件内容哈希识别重复
 
 ### ⚙️ 控制面板（Settings）
 - 路径管理（工作区 / 监控目录 / 磁盘备份 / 云备份）
@@ -169,7 +174,12 @@ LedgerProMax/
 │   ├── tauri.conf.json             # Tauri 配置 & 更新器
 │   └── Cargo.toml                  # Rust 依赖
 │
-├── .github/workflows/build.yml     # CI/CD · Tag 触发 · 自动发布
+├── .github/workflows/
+│   ├── ci.yml                      # push / PR 质量检查
+│   └── build.yml                   # 版本 Tag 触发 · Windows 发布
+├── scripts/                       # 版本同步、发布产物校验与测试
+├── AGENTS.md                      # AI 助手读取入口
+├── AI更新操作指南.md               # AI 更新、验证与 GitHub 操作约定
 ├── README.md                       # 本文件
 ├── CHANGELOG.md                    # 版本更新日志
 ├── 开发流程教程.md                  # 完整开发流程
@@ -178,54 +188,107 @@ LedgerProMax/
 
 ---
 
+<a id="development"></a>
+
 ## 🛠️ 开发者指南
 
 ### 环境要求
 
-| 工具 | 版本要求 |
-|------|---------|
-| Node.js | >= 22.12，推荐受支持的 LTS |
-| Rust | stable，与 CI 工具链一致 |
-| 操作系统 | Windows 10/11 |
+| 工具 | 要求 |
+|------|------|
+| Node.js | 22.12+，推荐受支持的 LTS；CI 使用 Node.js 22 |
+| Rust | stable，安装 Clippy 组件 |
+| Windows 编译工具 | Visual Studio Build Tools 的 C++ 桌面工作负载及 Windows SDK |
+| 桌面运行时 | Microsoft Edge WebView2 Runtime |
+| 正式支持平台 | Windows 10/11 x64 |
+
+GitHub CLI 用于 PR 与发布管理，普通开发不需要签名私钥。macOS/Linux 适配需独立验证，不能以浏览器页面能显示作为桌面功能通过的依据。
 
 ### 快速开始
 
 ```bash
-# 克隆项目
 git clone https://github.com/TimeTravelCoder/LedgerProMax.git
 cd LedgerProMax
-git checkout ProMax
-
-# 安装依赖
+git switch ProMax
 npm ci
-
-# 启动开发模式（前端热更新 + Tauri 桌面窗口）
 npm run dev:desktop
 ```
 
-`npm run dev` 只启动前端服务器，普通浏览器不支持 Tauri IPC。Windows 还需安装 Build Tools 的 C++ 桌面工作负载、Windows SDK 和 WebView2 Runtime。
+已有项目检出直接使用。`npm run dev:desktop` 启动 Tauri 桌面窗口、Vite 热更新和 Rust 编译；只开发页面布局时可用 `npm run dev`，普通浏览器没有 Tauri IPC，文件操作、备份和自动更新需要在桌面环境验证。
 
-提交前执行 `npm run version:check`、`npm run test:workflow`、`npm run lint`、`npm run build` 以及 Rust Clippy 和测试。完整步骤见 [开发流程教程](开发流程教程.md#4-提交前检查)。
+### 常用命令
 
-### 分支说明
+所有命令在仓库根目录执行，安装 Rust 工具链后运行 `rustup component add clippy`。
 
-| 分支 | 定位 |
+| 命令 | 用途 |
 |------|------|
-| `ProMax` | 主分支 · Windows 正式发布 |
-| `MAC` | macOS 平台适配 |
-| `MAC_Fix` | macOS 修复 |
-| `Win_Fix` | Windows 修复迭代 |
+| `npm ci` | 按锁文件安装前端依赖 |
+| `npm run dev:desktop` | 启动完整桌面开发环境 |
+| `npm run dev` | 启动前端开发服务器 |
+| `npm run typecheck` | 检查 TypeScript 项目引用 |
+| `npm run build` | TypeScript 检查与前端生产构建 |
+| `npm run lint` | 前端静态检查 |
+| `npm run version:check` | 核对应用版本、清单与锁文件一致性 |
+| `npm run test:workflow` | 测试版本同步和发布产物校验工具 |
+| `cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings` | Rust 静态检查 |
+| `cargo test --locked --manifest-path src-tauri/Cargo.toml` | 运行已有 Rust 测试 |
 
-### 发版流程
+根 TypeScript 配置采用项目引用，不用 `npx tsc --noEmit` 替代全项目检查。具体开发与验收要求见 [开发流程教程](开发流程教程.md)。
 
-详见 [发布操作手册.md](发布操作手册.md)，核心是：
+### 分支与日常更新
+
+`ProMax` 是长期主线。每个独立任务从最新主线创建短期分支，已有任务分支继续使用：
 
 ```bash
-# 同步版本并更新 CHANGELOG，完成检查和 PR 合并
+git switch ProMax
+git pull --ff-only origin ProMax
+git switch -c fix/backup-error
+```
+
+工作区须先保持干净或妥善保留已有修改。完成修改、验证和提交后推送任务分支，创建面向 `ProMax` 的 PR；最新 CI 通过并满足审阅要求后合并，再清理已完成任务分支。
+
+| 分支类型 | 用途 |
+|----------|------|
+| `ProMax` | 长期主线与正式版本基线 |
+| `feature/*` | 独立功能开发，完成后合并 |
+| `fix/*` | 问题修复，完成后合并 |
+| `docs/*` | 文档更新，完成后合并 |
+| `codex/*` | AI 协助的任务分支，完成后合并 |
+| `Win_Fix` | 历史改动迁移参考，不作为新任务起点 |
+
+旧 `MAC` 和 `MAC_Fix` 分支已归档为 `archive/mac-2026-10-14` 和 `archive/mac-fix-2026-10-14` 标签。历史分支有用的改动应逐项迁移，不能因为较旧就丢弃。
+
+### CI 与版本发布
+
+- `ci.yml`：对 `ProMax` / `main` 的 push 和 PR 执行版本检查、发布工具测试、lint、前端构建、Clippy 与 Rust 测试。
+- `build.yml`：由 `vX.Y.Z` 标签触发 Windows NSIS/MSI 构建、更新签名和 Release 发布；手动运行也必须选择版本标签，拒绝覆盖已有 Release。
+
+日常合并代码不等于发布新版本。准备发布时先同步版本、更新 CHANGELOG，完成验证和版本 PR。下面的版本号仅作示例：
+
+```bash
 npm run version:sync -- 3.2.4
 npm run version:check -- --tag v3.2.4
-# 随后按发布手册检查工作区、创建并推送标签
 ```
+
+版本工具同步清单与锁文件的应用版本，关于页自动读取 `package.json`。标签、签名、Release 附件与旧版本升级验收统一按 [发布操作手册](发布操作手册.md) 执行。构建成功不能代替 Windows 安装与升级测试。
+
+---
+
+<a id="ai-updates"></a>
+
+## 🤖 使用 AI 协助更新
+
+助手先读取 [AGENTS.md](AGENTS.md) 和 [AI更新操作指南](AI更新操作指南.md)，再按任务读取开发与发布文档。指南规定分支选择、验证、提交、PR、合并和发布步骤，并要求分别报告实际完成状态。
+
+可以直接使用以下请求：
+
+> 先读取 AGENTS.md 和 AI更新操作指南.md，帮我修复【具体问题】，完成相关验证。
+
+需要同步 GitHub 和创建 PR 时：
+
+> 按 AI更新操作指南.md 更新【具体内容】，验证后提交并推送任务分支，创建面向 ProMax 的 PR，先不要合并。
+
+需要合并或发布时明确说明目标 PR 或版本。保存云环境配置、推送代码、合并主线和发布应用是不同操作，分别确认结果。更多请求模板见 [AI更新操作指南](AI更新操作指南.md#10-用户可直接复用的请求)。
 
 ---
 
@@ -239,6 +302,8 @@ npm run version:check -- --tag v3.2.4
 - **本地优先** — 所有数据存储在本地，不上传任何文件到云端
 
 ---
+
+<a id="documentation"></a>
 
 ## 📋 文档索引
 
@@ -254,6 +319,8 @@ npm run version:check -- --tag v3.2.4
 
 ---
 
+<a id="license"></a>
+
 ## 📄 License
 
-MIT © 2026 [TimeTravelCoder](https://github.com/TimeTravelCoder)
+项目声明使用 MIT 许可证，© 2026 [TimeTravelCoder](https://github.com/TimeTravelCoder)。当前仓库尚缺独立 LICENSE 文件，需由维护者确认版权信息后补充。
