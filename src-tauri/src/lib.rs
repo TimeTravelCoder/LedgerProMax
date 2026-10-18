@@ -4,6 +4,10 @@ mod backup;
 mod semantic;
 mod watcher;
 mod config_manager;
+mod storage;
+
+#[cfg(test)]
+mod regression_tests;
 
 use std::collections::HashMap;
 use std::path::Path;
