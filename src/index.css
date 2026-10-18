@@ -140,7 +140,7 @@ body {
 /* Master Layout Grid */
 .app-container {
   display: grid;
-  grid-template-columns: 220px 1fr; /* Compacted from 260px for better scaling */
+  grid-template-columns: 200px minmax(0, 1fr);
   height: 100vh;
   width: 100vw;
   overflow: hidden;
@@ -152,7 +152,7 @@ body {
   border-right: 1px solid var(--border-light);
   background-color: rgba(18, 19, 26, 0.4);
   backdrop-filter: blur(20px);
-  padding: 24px;
+  padding: 24px 18px;
   display: flex;
   flex-direction: column;
   gap: 28px;
@@ -171,9 +171,9 @@ body {
 }
 
 .logo-icon {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #a855f7 52%, #22d3ee 100%);
   width: 32px;
   height: 32px;
+  flex-shrink: 0;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -181,7 +181,6 @@ body {
   font-size: 11px;
   font-weight: 800;
   color: #fff;
-  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.3);
 }
 
 .logo-copy {
@@ -250,6 +249,8 @@ body {
 
 /* Main Dashboard Panel */
 .main-content {
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -260,12 +261,13 @@ body {
 
 /* Top Header Bar */
 .header-bar {
+  flex-shrink: 0;
   height: 70px;
   border-bottom: 1px solid var(--border-light);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 40px;
+  padding: 0 24px;
   background-color: rgba(10, 11, 16, 0.2);
   backdrop-filter: blur(10px);
 }
@@ -284,6 +286,8 @@ body {
 
 /* Content Panels */
 .panel-body {
+  min-width: 0;
+  min-height: 0;
   flex: 1;
   padding: 24px; /* Reduced from 40px for responsive padding */
   overflow: hidden; /* Prevent double scrollbars and layout clipping! */
@@ -292,15 +296,51 @@ body {
   gap: 24px; /* Reduced from 32px for layout compatibility */
 }
 
+.dashboard-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: 20px;
+  overflow-y: auto;
+  padding: 0 6px 24px 0;
+  scrollbar-gutter: stable;
+}
+
+.dashboard-metrics,
+.dashboard-columns {
+  display: grid;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.dashboard-metrics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.dashboard-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-metrics > *,
+.dashboard-columns > * {
+  min-width: 0;
+}
+
+.dashboard-metrics svg {
+  flex-shrink: 0;
+}
+
 .pro-max-hero {
   display: grid;
-  grid-template-columns: minmax(320px, 1.25fr) minmax(360px, 1fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   gap: 20px;
   align-items: stretch;
-  min-height: 250px;
+  min-height: 220px;
   padding: 22px;
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: 16px;
   background:
     linear-gradient(135deg, rgba(129, 140, 248, 0.14), rgba(20, 184, 166, 0.08) 46%, rgba(251, 191, 36, 0.08)),
     rgba(255, 255, 255, 0.02);
@@ -346,7 +386,7 @@ body {
   margin: 0;
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: clamp(26px, 2.3vw, 34px);
   line-height: 1.12;
   font-weight: 800;
   letter-spacing: 0;
@@ -1599,4 +1639,65 @@ input[type="checkbox"]:checked::after {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
+}
+
+/* Keep content readable when a maximized window is restored or snapped. */
+@media (max-width: 1200px) {
+  .dashboard-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pro-max-hero {
+    gap: 16px;
+    padding: 18px;
+  }
+  .pro-max-signal {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .app-container {
+    grid-template-columns: 184px minmax(0, 1fr);
+  }
+  .sidebar {
+    padding: 20px 12px;
+    gap: 22px;
+  }
+  .panel-body {
+    padding: 16px;
+  }
+  .header-bar {
+    padding: 0 16px;
+  }
+  .header-title {
+    font-size: 19px;
+  }
+  .header-actions {
+    gap: 8px;
+  }
+  .pro-max-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pro-max-signal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-metrics,
+  .dashboard-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 800px) {
+  .dashboard-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-ambient::before {
+    animation: none;
+  }
+  .pro-max-signal {
+    transition: none;
+  }
 }

@@ -12,9 +12,13 @@
   "app": {
     "windows": [
       {
-        "title": "👑 Ledger Pro Max",
-        "width": 1024,
-        "height": 768,
+        "title": "Ledger Pro Max",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 640,
+        "maximized": true,
+        "center": true,
         "resizable": true,
         "fullscreen": false
       }
