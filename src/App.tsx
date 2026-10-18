@@ -77,8 +77,9 @@ export default function App() {
     for (const p of paths) {
       const filename = p.substring(p.lastIndexOf("\\") + 1).substring(p.lastIndexOf("/") + 1);
       try {
-        await handleImportToInbox(p, filename);
-        successCount++;
+        if (await handleImportToInbox(p, filename)) {
+          successCount++;
+        }
       } catch (err) {
         showToast(`导入文件失败: ${filename}`, "error");
       }
@@ -445,10 +446,12 @@ const normalizeTag = (value: string) => {
         /* const cleanStem = stem.replace(/ /g, "_").replace(/-/g, "_"); */
         // setTopicName(cleanStem);
       }
+      return true;
     } catch (err: any) {
       console.error(err);
       addLog(`[错误] 文件导入失败: ${err}`);
       showToast(`文件导入失败: ${String(err)}`, "error");
+      return false;
     }
   }
 

@@ -105,6 +105,29 @@ pub struct DatabaseManager {
 }
 
 impl DatabaseManager {
+    /// VACUUM INTO reads a consistent SQLite snapshot, including committed WAL data.
+    /// Publish only after the snapshot has been checked; keep the old backup on error.
+    pub fn snapshot_to(&self, destination: &Path) -> std::result::Result<(), String> {
+        let parent = destination.parent().ok_or("数据库备份路径无效")?;
+        let (temporary, file) = crate::storage::create_temp_file(parent).map_err(|e| e.to_string())?;
+        drop(file);
+        let result = (|| {
+            let conn = self.get_conn().map_err(|e| e.to_string())?;
+            conn.execute("VACUUM INTO ?1", params![temporary.to_string_lossy().as_ref()])
+                .map_err(|e| e.to_string())?;
+            let snapshot = Connection::open(&temporary).map_err(|e| e.to_string())?;
+            let check: String = snapshot.query_row("PRAGMA integrity_check", [], |row| row.get(0))
+                .map_err(|e| e.to_string())?;
+            if check != "ok" {
+                return Err(format!("数据库备份校验失败: {check}"));
+            }
+            drop(snapshot);
+            std::fs::rename(&temporary, destination).map_err(|e| e.to_string())
+        })();
+        let _ = std::fs::remove_file(&temporary);
+        result
+    }
+
     pub fn new<P: AsRef<Path>>(workspace_dir: P) -> Self {
         let db_dir = workspace_dir.as_ref();
         let db_path = db_dir.join(".docman.db");
@@ -298,18 +321,8 @@ impl DatabaseManager {
         let mut params_vec: Vec<String> = Vec::new();
         let mut conditions = Vec::new();
         
-        if let Some(ref q) = query {
-            let cleaned = q.trim().to_lowercase();
-            if !cleaned.is_empty() {
-                // SQL-level pre-filter on filename and filepath for text searches.
-                // The in-memory pinyin/relevance pass below refines results further,
-                // so this is a performance optimization, not the final filter.
-                conditions.push("(filename LIKE ? OR filepath LIKE ?)".to_string());
-                let like_pattern = format!("%{}%", cleaned);
-                params_vec.push(like_pattern.clone());
-                params_vec.push(like_pattern);
-            }
-        }
+        // Text matching below also supports initials, metadata and separate keywords.
+        // A filename/path LIKE pre-filter would discard valid candidates.
         
         if let Some(ref tags) = selected_tags {
             for tag in tags {
@@ -569,6 +582,12 @@ impl DatabaseManager {
         }
         Ok(history)
     }
+}
+
+#[cfg(test)]
+pub(crate) fn close_test_connections(root: &Path) {
+    CONNECTION_CACHE.lock().unwrap().retain(|path, _| !path.starts_with(root));
+    INITIALIZED_DBS.lock().unwrap().retain(|path| !path.starts_with(root));
 }
 
 #[cfg(test)]
