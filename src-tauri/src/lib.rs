@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::fs;
 use std::io::Write;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use db::{DatabaseManager, FileRecord, BackupHistoryRecord};
 use file_manager::FileManager;
 use backup::BackupManager;
@@ -556,6 +556,11 @@ pub fn run() {
             manager: watcher::WatcherManager::new(),
         })
         .setup(|app| {
+            // Explicitly apply the startup state after constructing the window,
+            // using the current monitor's work area rather than fixed bounds.
+            if let Some(window) = app.get_webview_window("main") {
+                window.maximize()?;
+            }
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

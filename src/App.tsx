@@ -1192,7 +1192,7 @@ const handleAddOrUpdateRule = () => {
       {/* 👑 macOS Liquid-Glass Sidebar */}
       <div className="sidebar">
         <div className="logo-container">
-          <div className="logo-icon">PM</div>
+          <img className="logo-icon" src="/favicon.svg" alt="" />
           <div className="logo-copy">
             <span>Ledger</span>
             <strong>Pro Max</strong>
@@ -1246,7 +1246,7 @@ const handleAddOrUpdateRule = () => {
 
         {/* Global summary card inside sidebar */}
         <div style={{marginTop: "auto", padding: "16px", background: theme === "light" ? "rgba(0, 0, 0, 0.02)" : "rgba(255,255,255,0.02)", borderRadius: "12px", border: "1px solid var(--border-light)"}}>
-          <div className="pro-max-badge">PRO MAX WORKSPACE</div>
+          <div className="pro-max-badge">WORKSPACE</div>
           <h4 style={{fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px", textTransform: "uppercase"}}>当前工作区概览</h4>
           <div style={{display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px"}}>
             <div style={{display: "flex", justifyContent: "space-between"}}>
