@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import ConfirmDialog, { type ConfirmOptions } from "./components/ConfirmDialog";
 import { listen } from "@tauri-apps/api/event";
 import LiquidGlass from "./components/liquid-glass/LiquidGlass";
 import PreviewPanel from "./components/PreviewPanel";
 import ZipArchiveModal from "./components/ZipArchiveModal";
 import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 import {
   Inbox,
   FolderOpen,
@@ -32,7 +33,7 @@ import BackupPage from "./components/pages/BackupPage";
 import SettingsPage from "./components/pages/SettingsPage";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "inbox" | "workspace" | "backup" | "settings">("dashboard");
+  const [activeTab, commitActiveTab] = useState<"dashboard" | "inbox" | "workspace" | "backup" | "settings">("dashboard");
   const activeTabRef = useRef(activeTab);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
@@ -210,6 +211,50 @@ export default function App() {
     }
   }, [workspaceDir, monitoredDirs, backupDiskDir, backupCloudDir, theme, tagsState, autoRulesState, namingTemplates, workspaceLang]);
 
+  const [confirmation, setConfirmation] = useState<ConfirmOptions | null>(null);
+  const confirmationRef = useRef<((value: boolean) => void) | null>(null);
+  const requestConfirmation = (options: ConfirmOptions): Promise<boolean> => {
+    if (confirmationRef.current) return Promise.resolve(false);
+    return new Promise(resolve => { confirmationRef.current = resolve; setConfirmation(options); });
+  };
+  const resolveConfirmation = (value: boolean) => {
+    confirmationRef.current?.(value);
+    confirmationRef.current = null;
+    setConfirmation(null);
+  };
+  const draftSnapshot = JSON.stringify({ tempWorkspaceDir, tempMonitoredDirs, tempBackupDiskDir, tempBackupCloudDir,
+    workspaceLang, tagsState, autoRulesState, namingTemplates });
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
+  useEffect(() => {
+    if (configLoaded && savedSnapshot === null) setSavedSnapshot(draftSnapshot);
+  }, [configLoaded, savedSnapshot, draftSnapshot]);
+  const hasUnsavedSettings = savedSnapshot !== null && savedSnapshot !== draftSnapshot;
+  const dirtyRef = useRef(false);
+  dirtyRef.current = hasUnsavedSettings;
+  const setActiveTab = (next: typeof activeTab) => {
+    if (next === activeTabRef.current) return;
+    if (activeTabRef.current === "settings" && dirtyRef.current) {
+      void requestConfirmation({ title: "设置尚未保存", message: "离开后修改会暂时保留，重启应用后将丢失。建议先保存设置。",
+        confirmLabel: "暂不保存，离开", cancelLabel: "返回设置" }).then(confirmed => { if (confirmed) commitActiveTab(next); });
+    } else commitActiveTab(next);
+  };
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (dirtyRef.current) { event.preventDefault(); event.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    const unlisten = getCurrentWindow().onCloseRequested(async event => {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      if (await requestConfirmation({ title: "退出前保存设置", message: "还有未保存的设置，直接退出将丢失这些修改。",
+        confirmLabel: "放弃修改并退出", cancelLabel: "返回保存" })) {
+        dirtyRef.current = false;
+        try { await getCurrentWindow().destroy(); } catch (error) { dirtyRef.current = true; console.error(error); }
+      }
+    });
+    return () => { window.removeEventListener("beforeunload", beforeUnload); void unlisten.then(stop => stop()).catch(console.error); };
+  }, []);
+
   const [pathValidation, setPathValidation] = useState<PathValidationMap>({
     workspace: null,
     monitor: null,
@@ -341,33 +386,98 @@ const normalizeTag = (value: string) => {
   };
 
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState("");
+  const [updateErrorDetail, setUpdateErrorDetail] = useState("");
+  const [updateProgress, setUpdateProgress] = useState<number | null>(null);
+  const updateInProgressRef = useRef(false);
   const handleCheckForUpdates = async (manual: boolean) => {
-    if (isCheckingUpdate) return;
+    if (updateInProgressRef.current) return;
+    updateInProgressRef.current = true;
     setIsCheckingUpdate(true);
+    setUpdateStatus("正在检查更新…");
+    setUpdateErrorDetail("");
+    setUpdateProgress(null);
+    let update: Awaited<ReturnType<typeof check>> = null;
+    let phase: "check" | "download" | "install" = "check";
     if (manual) {
       showToast("正在检查更新...", "info");
     }
     try {
-      const update = await check();
+      update = await check({ timeout: 15_000 });
       if (update) {
+        if (import.meta.env.DEV) {
+          const message = `发现新版本 v${update.version}。开发构建请前往发布页面下载。`;
+          setUpdateStatus(message);
+          if (manual) showToast(message, "info");
+          return;
+        }
+        if (dirtyRef.current) {
+          setUpdateStatus("发现新版本，请先保存设置，再检查更新。");
+          showToast("请先保存设置，再进行更新。", "warning");
+          return;
+        }
         const confirmMsg = `发现新版本 v${update.version}！\n\n更新内容：\n${update.body || "无详细说明"}\n\n是否立即下载并升级？`;
-        if (window.confirm(confirmMsg)) {
-          showToast("正在下载更新，请稍候...", "info");
-          await update.downloadAndInstall();
-          showToast("更新安装成功，正在重启应用...", "success");
-          await relaunch();
+        if (!await requestConfirmation({ title: `发现新版本 v${update.version}`, message: confirmMsg, confirmLabel: "下载并安装", cancelLabel: "稍后更新" })) {
+          setUpdateStatus("已取消本次更新，当前版本保持不变。");
+          return;
         }
+        phase = "download";
+        setUpdateStatus("正在下载更新…");
+        showToast("开始下载更新，可在关于页查看进度。", "info");
+        let total = 0;
+        let downloaded = 0;
+        let lastBucket = -1;
+        await update.download(event => {
+          if (event.event === "Started") {
+            total = event.data.contentLength || 0;
+            downloaded = 0;
+            lastBucket = -1;
+          } else if (event.event === "Progress") {
+            downloaded += event.data.chunkLength;
+            const percent = total > 0 ? Math.min(100, Math.floor(downloaded / total * 100)) : null;
+            setUpdateProgress(percent);
+            const bucket = percent === null ? Math.floor(downloaded / 1024 / 1024) : Math.floor(percent / 5);
+            if (bucket !== lastBucket) {
+              lastBucket = bucket;
+              setUpdateStatus(percent === null
+                ? `正在下载更新：${(downloaded / 1024 / 1024).toFixed(1)} MB`
+                : `正在下载更新：${percent}%`);
+            }
+          } else if (event.event === "Finished") {
+            setUpdateProgress(null);
+            setUpdateStatus("下载完成，正在验证更新包签名…");
+          }
+        }, { timeout: 300_000 });
+        phase = "install";
+        setUpdateStatus("更新包已通过签名校验，正在启动安装程序。应用即将关闭，请完成安装向导。");
+        showToast("即将启动安装程序并关闭应用，请完成安装向导。", "info");
+        await update.install();
+        // On Windows the updater exits this process after launching the installer.
+        // A returned IPC call still cannot prove the installer has completed.
+        setUpdateStatus("安装请求已提交，请完成安装向导后重新打开应用。");
       } else {
-        if (manual) {
-          showToast("当前已是最新版本！", "success");
-        }
+        const message = import.meta.env.DEV
+          ? "暂无更新的正式版本（当前为开发构建）。"
+          : "当前已是最新版本。";
+        setUpdateStatus(message);
+        if (manual) showToast(message, "success");
       }
-    } catch (err: any) {
-      console.error("更新检查失败:", err);
-      if (manual) {
-        showToast(`检查更新失败: ${err}`, "error");
-      }
+    } catch (err) {
+      const label = phase === "check" ? "检查更新" : phase === "download" ? "下载或签名校验" : "启动安装程序";
+      const guidance = phase === "check" ? "请检查网络连接后重试。" : phase === "download" ? "请重试或前往发布页面下载安装包。" : "请前往发布页面下载安装包，并检查安装权限。";
+      const message = `${label}失败，${guidance}`;
+      setUpdateErrorDetail(String(err));
+      console.error(message);
+      setUpdateStatus(message);
+      if (manual || phase !== "check") showToast(message, "error");
     } finally {
+      try {
+        await update?.close();
+      } catch (error) {
+        console.error("释放更新资源失败:", error);
+      }
+      setUpdateProgress(null);
+      updateInProgressRef.current = false;
       setIsCheckingUpdate(false);
     }
   };
@@ -563,9 +673,11 @@ const normalizeTag = (value: string) => {
     };
   }, []);
 
+  const saveConfigRef = useRef<() => Promise<void>>(async () => {});
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.querySelector("dialog[open]")) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
       const ctrl = e.ctrlKey || e.metaKey;
 
@@ -574,7 +686,7 @@ const normalizeTag = (value: string) => {
 
       if (ctrl && e.key === "f") { e.preventDefault(); setActiveTab("workspace"); setTimeout(() => document.querySelector<HTMLInputElement>('.main-content input[type="text"]')?.focus(), 100); }
       else if (ctrl && e.key === "n") { e.preventDefault(); setActiveTab("workspace"); setIsCreateFolderExpanded(true); }
-      else if (ctrl && e.key === "s") { e.preventDefault(); handleSaveConfig(); }
+      else if (ctrl && e.key === "s") { e.preventDefault(); void saveConfigRef.current(); }
       else if (e.key === "Delete" && selFile) { e.preventDefault(); handleDeleteFile(selFile.filepath); }
       else if (ctrl && e.key === "1") { e.preventDefault(); setActiveTab("dashboard"); }
       else if (ctrl && e.key === "2") { e.preventDefault(); setActiveTab("inbox"); }
@@ -721,6 +833,9 @@ const normalizeTag = (value: string) => {
       return;
     }
 
+    const snapshotToSave = draftSnapshot;
+    setSaveStatus("saving");
+    setSaveMessage("正在保存设置…");
     try {
       const config = {
         workspace_dir: tempWorkspaceDir || "",
@@ -737,6 +852,7 @@ const normalizeTag = (value: string) => {
         custom_name_templates: namingTemplates.filter(t => t.key.startsWith("custom_"))
       };
       await invoke("save_config", { config });
+      setSavedSnapshot(snapshotToSave);
 
       // 同步核心全局 state
       setWorkspaceDir(tempWorkspaceDir);
@@ -756,9 +872,12 @@ const normalizeTag = (value: string) => {
     } catch (err: any) {
       addLog(`[错误] 配置保存失败: ${err}`);
       setSaveStatus("error");
-      setSaveMessage(`保存失败: ${err}`);
+      setSaveMessage("保存失败，请检查配置目录的写入权限后重试。");
+      showToast("设置未能保存，请检查目录权限后重试。", "error");
     }
   };
+
+  saveConfigRef.current = handleSaveConfig;
 
   // Trigger Pinyin Search
   useEffect(() => {
@@ -1186,6 +1305,7 @@ const handleAddOrUpdateRule = () => {
 
   return (
     <div className="app-container" ref={mainRef}>
+      {confirmation && <ConfirmDialog options={confirmation} onResolve={resolveConfirmation} />}
       {/* Background Glowing Ambient Orbs */}
       <div className="bg-ambient" />
 
@@ -1270,7 +1390,7 @@ const handleAddOrUpdateRule = () => {
             {activeTab === "inbox" && "Pro Inbox 智能投递收集箱"}
             {activeTab === "workspace" && "Pro Workspace 分类工作空间"}
             {activeTab === "backup" && "Pro Backup 3-2-1 增量镜像"}
-            {activeTab === "settings" && "Pro Control 控制面板与系统配置"}
+            {activeTab === "settings" && "设置与偏好"}
           </div>
 
           <div className="header-actions">
@@ -1556,6 +1676,10 @@ const handleAddOrUpdateRule = () => {
               addLog={addLog}
               showToast={showToast}
               isCheckingUpdate={isCheckingUpdate}
+              updateStatus={updateStatus}
+              updateErrorDetail={updateErrorDetail}
+              updateProgress={updateProgress}
+              hasUnsavedSettings={hasUnsavedSettings}
               handleCheckForUpdates={handleCheckForUpdates}
               workspaceDir={workspaceDir}
             />

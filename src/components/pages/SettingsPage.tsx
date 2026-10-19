@@ -7,7 +7,14 @@ import {
   Save, 
   ArrowUp, 
   ArrowDown, 
-  TestTube2 
+  TestTube2,
+  FolderOpen,
+  Tags,
+  Wand2,
+  Info,
+  Upload,
+  Download,
+  RotateCcw
 } from "lucide-react";
 import type { AutoRule, TagGroupKey, PathValidationMap } from "../../types";
 import { standardDirPresets } from "../../utils/fileUtils";
@@ -51,6 +58,10 @@ interface SettingsPageProps {
   addLog: (log: string) => void;
   showToast: (msg: string, type: "success" | "warning" | "error" | "info") => void;
   isCheckingUpdate: boolean;
+  updateStatus: string;
+  updateErrorDetail: string;
+  updateProgress: number | null;
+  hasUnsavedSettings: boolean;
   handleCheckForUpdates: (force: boolean) => void;
   workspaceDir: string;
 }
@@ -92,6 +103,10 @@ export default function SettingsPage({
   addLog,
   showToast,
   isCheckingUpdate,
+  updateStatus,
+  updateErrorDetail,
+  updateProgress,
+  hasUnsavedSettings,
   handleCheckForUpdates,
   workspaceDir
 }: SettingsPageProps) {
@@ -256,12 +271,11 @@ export default function SettingsPage({
   };
 
   return (
-    <div className="settings-shell" style={{ overflowY: "auto", flex: 1, height: "100%", paddingRight: "6px", paddingBottom: "30px", display: "flex", flexDirection: "column" }}>
+    <div className="settings-shell">
       <div className="settings-header">
         <div>
-          <span className="pro-max-kicker">Pro Control</span>
-          <h3 className="card-title" style={{marginTop: "10px"}}>控制面板与全局系统配置</h3>
-          <p>把路径、标签和自动规则作为一套可验证的工作流来管理。</p>
+          <h3 className="card-title">偏好设置</h3>
+          <p>管理存储位置、标签体系与整理规则。</p>
         </div>
         <div className="settings-health">
           <span>配置健康度</span>
@@ -272,71 +286,59 @@ export default function SettingsPage({
 
       <div className="settings-metrics">
         <div><strong>{monitoredPathList.length}</strong><span>监听目录</span></div>
-        <div><strong>{totalTagCount}</strong><span>标签泡泡</span></div>
+        <div><strong>{totalTagCount}</strong><span>分类标签</span></div>
         <div><strong>{enabledRulesCount}</strong><span>启用规则</span></div>
         <div><strong>{backupScore}</strong><span>备份指数</span></div>
       </div>
 
       {/* Fluent Segmented Control Sub-navigation */}
-      <div style={{
-        display: "flex",
-        background: theme === "light" ? "rgba(0, 0, 0, 0.03)" : "rgba(255, 255, 255, 0.03)",
-        padding: "4px",
-        borderRadius: "10px",
-        border: "1px solid var(--border-light)",
-        gap: "4px",
-        marginBottom: "20px",
-        flexShrink: 0
+      <div className="settings-tabs" role="tablist" aria-label="设置分组" onKeyDown={event => {
+        const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+        const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+        let next: number;
+        if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+        else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+        else if (event.key === "Home") next = 0;
+        else if (event.key === "End") next = tabs.length - 1;
+        else return;
+        event.preventDefault();
+        tabs[next]?.focus();
+        tabs[next]?.click();
       }}>
         {[
-          { key: "paths" as const, label: "🌐 基础路径与初始化" },
-          { key: "tags" as const, label: "🏷️ 可视化标签池" },
-          { key: "rules" as const, label: "🤖 整理与命名规则" },
-          { key: "about" as const, label: "ℹ️ 关于 Ledger Pro Max" }
+          { key: "paths" as const, label: "存储与路径", icon: FolderOpen },
+          { key: "tags" as const, label: "标签管理", icon: Tags },
+          { key: "rules" as const, label: "整理规则", icon: Wand2 },
+          { key: "about" as const, label: "关于与更新", icon: Info }
         ].map(sub => (
           <button
             key={sub.key}
             type="button"
+            role="tab"
+            id={`settings-tab-${sub.key}`}
+            aria-controls={`settings-panel-${sub.key}`}
+            aria-selected={settingsSubTab === sub.key}
+            tabIndex={settingsSubTab === sub.key ? 0 : -1}
+            className={`settings-tab ${settingsSubTab === sub.key ? "active" : ""}`}
             onClick={() => setSettingsSubTab(sub.key)}
-            style={{
-              flex: 1,
-              padding: "8px 16px",
-              borderRadius: "8px",
-              border: "none",
-              background: settingsSubTab === sub.key
-                ? (theme === "light" ? "#fff" : "rgba(255, 255, 255, 0.08)")
-                : "transparent",
-              color: settingsSubTab === sub.key
-                ? "var(--color-primary)"
-                : "var(--text-secondary)",
-              cursor: "pointer",
-              fontSize: "12px",
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              boxShadow: settingsSubTab === sub.key && theme === "light"
-                ? "0 2px 8px rgba(0,0,0,0.06)"
-                : "none",
-              transition: "all 0.15s ease"
-            }}
           >
+            <sub.icon size={17} aria-hidden="true" />
             {sub.label}
           </button>
         ))}
       </div>
 
+      <div key={settingsSubTab} className="settings-content" role="tabpanel" id={`settings-panel-${settingsSubTab}`} aria-labelledby={`settings-tab-${settingsSubTab}`} tabIndex={0}>
       {settingsSubTab === "paths" && (
         <section className="settings-section">
           <div className="settings-section__title">
             <h4>路径与备份目标</h4>
-            <span>真实校验目录状态，降低保存后才发现路径不可用的概率。</span>
+            <span>设置文件存放位置与备份目录，路径状态会自动校验。</span>
           </div>
           <div className="settings-path-grid">
             {[
               { key: "workspace" as const, label: "工作空间根路径", value: tempWorkspaceDir, setter: setTempWorkspaceDir, required: true },
-              { key: "monitor" as const, label: "多目录监听 (支持添加多个不同目录)", value: tempMonitoredDirs, setter: setTempMonitoredDirs, required: true },
+              { key: "monitor" as const, label: "监听目录", value: tempMonitoredDirs, setter: setTempMonitoredDirs, required: true },
               { key: "disk" as const, label: "外部硬盘备份路径", value: tempBackupDiskDir, setter: setTempBackupDiskDir, required: false },
               { key: "cloud" as const, label: "私有网盘/云端备份路径", value: tempBackupCloudDir, setter: setTempBackupCloudDir, required: false },
             ].map(item => {
@@ -349,11 +351,14 @@ export default function SettingsPage({
               if (item.key === "monitor") {
                 const pathsList = parseListInput(item.value);
                 return (
-                  <div key={item.key} className="settings-field" style={{ gridColumn: "span 2", display: "flex", flexDirection: "column" }}>
-                    <label>{item.label}</label>
+                  <div key={item.key} className="settings-field settings-field--wide">
+                    <div className="settings-field-heading"><span id="monitor-label">{item.label}</span><small>可添加多个目录</small></div>
+                    <div className="settings-field-hint">监测新文件，并在收集箱中提示整理。</div>
                     <div style={{ display: "flex", gap: "8px", width: "100%", alignItems: "flex-start" }}>
                       <div 
                         className="input-field" 
+                        role="group"
+                        aria-labelledby="monitor-label"
                         style={{ 
                           flex: 1, 
                           minHeight: "36px", 
@@ -392,6 +397,7 @@ export default function SettingsPage({
                               {p}
                               <button 
                                 type="button"
+                                aria-label={`移除监听目录 ${p}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const updated = pathsList.filter((_, idx) => idx !== pIdx);
@@ -474,15 +480,16 @@ export default function SettingsPage({
               }
 
               return (
-                <div key={item.key} className="settings-field" style={isFullWidth ? { gridColumn: "span 2" } : undefined}>
-                  <label>{item.label}</label>
+                <div key={item.key} className={`settings-field ${isFullWidth ? "settings-field--wide" : ""}`}>
+                  <div className="settings-field-heading"><label htmlFor={`settings-path-${item.key}`}>{item.label}</label><small>{item.required ? "必填" : "可选"}</small></div>
                   <div style={{ display: "flex", gap: "8px", width: "100%" }}>
                     <input
                       type="text"
+                      id={`settings-path-${item.key}`}
                       value={item.value}
                       onChange={(e) => item.setter(e.target.value)}
                       className="input-field"
-                      style={{ flex: 1 }}
+                      style={{ flex: 1, minWidth: 0 }}
                     />
                     <button
                       type="button"
@@ -517,17 +524,18 @@ export default function SettingsPage({
                     </button>
                   </div>
                   <div className={`settings-status ${emptyOptional ? "warn" : ok ? "ok" : "warn"}`}>
-                    {emptyOptional ? "未配置，将影响 3-2-1 备份完整度" : validation?.message || "等待校验"}
+                    {emptyOptional ? "尚未启用，可稍后配置" : validation?.message || "等待校验"}
                   </div>
                 </div>
               );
             })}
 
             {/* 🆕 Workspace Initialization Specification Selector */}
-            <div className="settings-field" style={{ gridColumn: "span 2" }}>
-              <label>工作空间初始目录规格</label>
+            <div className="settings-field settings-field--wide settings-workspace-preset">
+              <label htmlFor="workspace-preset">工作空间目录模板</label>
               <select
                 value={workspaceLang}
+                id="workspace-preset"
                 onChange={(e) => setWorkspaceLang(e.target.value)}
                 className="input-field"
                 style={{ cursor: "pointer" }}
@@ -551,19 +559,21 @@ export default function SettingsPage({
       {settingsSubTab === "tags" && (
         <section className="settings-section">
           <div className="settings-section__title">
-            <h4>VisualTagPool 可视化标签池</h4>
+            <h4>标签管理</h4>
             <span>支持新增、搜索、重命名和删除，方便维护长期标签体系。</span>
           </div>
           <div className="settings-toolbar">
             <input
               type="text"
               placeholder="新标签名，例如 #量子力学"
+              aria-label="新标签名称"
               value={newTagInput}
               onChange={(e) => setNewTagInput(e.target.value)}
               className="input-field"
             />
             <select
               value={newTagGroup}
+              aria-label="标签分组"
               onChange={(e) => setNewTagGroup(e.target.value as TagGroupKey)}
               className="input-field"
             >
@@ -581,6 +591,7 @@ export default function SettingsPage({
             <input
               type="text"
               placeholder="搜索标签"
+              aria-label="搜索标签"
               value={tagSearchQuery}
               onChange={(e) => setTagSearchQuery(e.target.value)}
               className="input-field"
@@ -594,11 +605,15 @@ export default function SettingsPage({
                 <small>{tagsState[group].length}</small>
               </span>
               <div className="settings-chip-row">
+                {filteredTagsState[group].length === 0 && (
+                  <p className="settings-empty">{tagSearchQuery.trim() ? "没有匹配的标签，试试其他关键词。" : "此分组暂无标签，可在上方添加。"}</p>
+                )}
                 {filteredTagsState[group].map(tag => (
                   <span key={tag} className={`tag-chip ${group}`}>
                     {editingTag?.group === group && editingTag.value === tag ? (
                       <input
                         value={editingTagValue}
+                        aria-label="修改标签名称"
                         onChange={(e) => setEditingTagValue(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") handleCommitTagEdit();
@@ -621,14 +636,15 @@ export default function SettingsPage({
         <>
           <section className="settings-section">
             <div className="settings-section__title">
-              <h4>📁 可视化命名模板自定义管理器</h4>
-              <span>定义并扩展智能收集箱里的文档命名模板。支持 `{"{date}"}`, `{"{topic}"}`, `{"{version}"}`, `{"{status}"}` 变量。</span>
+              <h4>文件命名模板</h4>
+              <span>支持 {"{date}"}、{"{topic}"}、{"{version}"}、{"{status}"} 变量。</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr auto", gap: "10px", alignItems: "center" }}>
+              <div className="settings-template-editor">
                 <input 
                   type="text" 
                   placeholder="模板名称，如: 实验报告模板" 
+                  aria-label="模板名称"
                   value={newTemplateLabel} 
                   onChange={(e) => setNewTemplateLabel(e.target.value)} 
                   className="input-field" 
@@ -636,6 +652,7 @@ export default function SettingsPage({
                 <input 
                   type="text" 
                   placeholder="命名格式，如: {date}_实验_{topic}_v{version}" 
+                  aria-label="命名格式"
                   value={newTemplatePattern} 
                   onChange={(e) => setNewTemplatePattern(e.target.value)} 
                   className="input-field" 
@@ -693,28 +710,28 @@ export default function SettingsPage({
 
           <section className="settings-section">
             <div className="settings-section__title">
-              <h4>AutoRules 智能自动匹配整理规则</h4>
+              <h4>自动整理规则</h4>
               <span>支持启用、编辑、排序、删除和测试命中，越靠前优先级越高。</span>
             </div>
             <div className="settings-rule-editor">
               <div className="settings-rule-grid">
                 <div className="settings-field">
-                  <label>规则名称</label>
-                  <input type="text" placeholder="如: 代码文档" value={newRuleName} onChange={(e) => setNewRuleName(e.target.value)} className="input-field" />
+                  <label htmlFor="rule-name">规则名称</label>
+                  <input id="rule-name" type="text" placeholder="如: 代码文档" value={newRuleName} onChange={(e) => setNewRuleName(e.target.value)} className="input-field" />
                 </div>
                 <div className="settings-field">
-                  <label>目标目录</label>
-                  <select value={newRulePrefix} onChange={(e) => setNewRulePrefix(e.target.value)} className="input-field">
+                  <label htmlFor="rule-directory">目标目录</label>
+                  <select id="rule-directory" value={newRulePrefix} onChange={(e) => setNewRulePrefix(e.target.value)} className="input-field">
                     {standardDirs.map(dir => <option key={dir} value={dir.substring(0, 2)}>{dir}</option>)}
                   </select>
                 </div>
                 <div className="settings-field">
-                  <label>关键字匹配</label>
-                  <input type="text" placeholder="paper, arxiv, 汇报" value={newRuleKeywords} onChange={(e) => setNewRuleKeywords(e.target.value)} className="input-field" />
+                  <label htmlFor="rule-keywords">关键字匹配</label>
+                  <input id="rule-keywords" type="text" placeholder="paper, arxiv, 汇报" value={newRuleKeywords} onChange={(e) => setNewRuleKeywords(e.target.value)} className="input-field" />
                 </div>
                 <div className="settings-field">
-                  <label>扩展名匹配</label>
-                  <input type="text" placeholder=".pdf, .pptx, .py" value={newRuleExtensions} onChange={(e) => setNewRuleExtensions(e.target.value)} className="input-field" />
+                  <label htmlFor="rule-extensions">扩展名匹配</label>
+                  <input id="rule-extensions" type="text" placeholder=".pdf, .pptx, .py" value={newRuleExtensions} onChange={(e) => setNewRuleExtensions(e.target.value)} className="input-field" />
                 </div>
               </div>
               <div className="settings-rule-actions">
@@ -741,6 +758,7 @@ export default function SettingsPage({
               <input
                 type="text"
                 value={ruleTestFilename}
+                aria-label="测试文件名"
                 onChange={(e) => setRuleTestFilename(e.target.value)}
                 className="input-field"
                 placeholder="输入文件名测试，例如 report_final.pdf"
@@ -757,6 +775,7 @@ export default function SettingsPage({
                     <label className="switch">
                       <input
                         type="checkbox"
+                        aria-label={`启用规则 ${rule.name}`}
                         checked={rule.enabled !== false}
                         onChange={() => setAutoRulesState(prev => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, enabled: item.enabled === false } : item))}
                       />
@@ -787,16 +806,20 @@ export default function SettingsPage({
           theme={theme}
           workspaceDir={workspaceDir}
           isCheckingUpdate={isCheckingUpdate}
+          updateStatus={updateStatus}
+          updateErrorDetail={updateErrorDetail}
+          updateProgress={updateProgress}
           handleCheckForUpdates={handleCheckForUpdates}
         />
       )}
 
+      </div>
       {settingsSubTab !== "about" && (
         <div className="settings-savebar">
-          <div className={`settings-status ${saveStatus === "error" ? "warn" : saveStatus === "saved" ? "ok" : ""}`}>
-            {saveMessage || "修改配置后请保存，保存会同步工作空间与监听规则。"}
+          <div role="status" aria-live="polite" className={`settings-status ${saveStatus === "error" ? "warn" : saveStatus === "saved" ? "ok" : ""}`}>
+            {saveStatus === "error" || saveStatus === "saving" ? saveMessage : hasUnsavedSettings ? "有未保存的修改" : saveMessage || "设置已同步"}
           </div>
-          <div style={{display: "flex", gap: "8px"}}>
+          <div className="settings-save-actions">
             <button className="btn" onClick={async () => {
               try {
                 const config = await invoke("load_config");
@@ -808,7 +831,7 @@ export default function SettingsPage({
                   showToast(`导出失败: ${err}`, "error");
                 }
               }
-            }} style={{fontSize: "11px", padding: "6px 12px"}}>📤 导出</button>
+            }}><Upload size={15} />导出配置</button>
             <button className="btn" onClick={async () => {
               try {
                 const text: string = await invoke("select_import_config_file");
@@ -823,7 +846,7 @@ export default function SettingsPage({
                   showToast(`导入失败: ${err}`, "error");
                 }
               }
-            }} style={{fontSize: "11px", padding: "6px 12px"}}>📥 导入</button>
+            }}><Download size={15} />导入配置</button>
             <button className="btn danger" onClick={() => {
               if (!window.confirm("确定要重置所有配置为默认值吗？此操作不可撤销。\n注意：您的当前工作空间与多目录监听路径将被保留。")) return;
               setBackupDiskDir(""); setBackupCloudDir("");
@@ -832,10 +855,10 @@ export default function SettingsPage({
               setAutoRulesState([]); setNamingTemplates(prev => prev.filter(t => !t.key.startsWith("custom_")));
               setWorkspaceLang("zh-full"); setTheme("light");
               showToast("配置已成功重置，请点击保存生效。", "warning");
-            }} style={{fontSize: "11px", padding: "6px 12px"}}>🔄 重置</button>
+            }}><RotateCcw size={15} />重置</button>
             <button className="btn btn-primary" onClick={handleSaveConfig} disabled={saveStatus === "saving"}>
               <Save size={16} />
-              {saveStatus === "saving" ? "保存中..." : "保存并热加载"}
+              {saveStatus === "saving" ? "保存中..." : "保存设置"}
             </button>
           </div>
         </div>
