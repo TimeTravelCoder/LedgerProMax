@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Ledger Pro Max",
-  "version": "3.2.3",
+  "version": "3.2.4",
   "identifier": "com.timetravelcoder.ledgerpromax",
   "build": {
     "frontendDist": "../dist",
@@ -51,7 +51,10 @@
         "language": "zh-CN"
       },
       "nsis": {
-        "languages": ["SimpChinese", "English"],
+        "languages": [
+          "SimpChinese",
+          "English"
+        ],
         "installerIcon": "icons/icon.ico"
       }
     },
