@@ -71,3 +71,15 @@ test('release rejects missing installers, duplicate installers and missing or em
     assert.throws(() => prepareRelease(root, 'v3.2.3', 'TimeTravelCoder/LedgerProMax'), /installer|signature/);
   }
 });
+
+test('version sync accepts Windows CRLF without changing dependency versions', t => {
+  const { root } = fixture(t);
+  for (const file of ['src-tauri/Cargo.toml', 'src-tauri/Cargo.lock']) {
+    const path = join(root, file);
+    writeFileSync(path, readFileSync(path, 'utf8').replace(/\r?\n/g, '\r\n'));
+  }
+  assert.equal(checkVersion(root), '3.2.3');
+  assert.equal(syncVersion(root, '3.2.4'), '3.2.4');
+  assert.ok(readFileSync(join(root, 'src-tauri/Cargo.lock'), 'utf8').includes('name = "dependency"\r\nversion = "1.0.0"\r\nchecksum = "keep"'));
+  assert.equal(syncVersion(root, '3.2.4'), '3.2.4');
+});

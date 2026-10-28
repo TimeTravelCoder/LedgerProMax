@@ -613,7 +613,7 @@ impl FileManager {
         
         // Target category: Typically 10归档区 (or standard dirs last index)
         let archive_dir = ws_root.join("10归档区");
-        let _ = fs::create_dir_all(&archive_dir);
+        fs::create_dir_all(&archive_dir).map_err(|e| e.to_string())?;
 
         // Sanitize ZIP name
         let clean_zip_name = Path::new(zip_name).file_name()
@@ -621,7 +621,9 @@ impl FileManager {
             .unwrap_or_else(|| "archive.zip".to_string());
             
         let dest_zip_path = archive_dir.join(&clean_zip_name);
-        let temp_zip_path = dest_zip_path.with_extension("zip.tmp");
+        if dest_zip_path.exists() {
+            return Err("同名归档已存在，请更换压缩包名称；原件和已有归档均已保留。".to_string());
+        }
 
         let source_paths: Vec<(PathBuf, String)> = filenames.into_iter()
             .filter_map(|rel| {
@@ -638,10 +640,12 @@ impl FileManager {
             return Err("归档列表中没有可打包的有效文件。".to_string());
         }
 
+        let (temp_zip_path, temp_file) = crate::storage::create_temp_file(&archive_dir)
+            .map_err(|e| e.to_string())?;
+
         // Compress to temp file, verify, rename atomically — cleanup on failure
         let result = (|| -> Result<(), String> {
-            let file = fs::File::create(&temp_zip_path).map_err(|e| e.to_string())?;
-            let mut zip = zip::ZipWriter::new(file);
+            let mut zip = zip::ZipWriter::new(temp_file);
             let options = zip::write::FileOptions::<()>::default()
                 .compression_method(zip::CompressionMethod::Deflated);
 
@@ -653,24 +657,26 @@ impl FileManager {
                 let mut f = fs::File::open(src_abs).map_err(|e| e.to_string())?;
                 std::io::copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
             }
-            zip.finish().map_err(|e| e.to_string())?;
+            zip.finish().map_err(|e| e.to_string())?.sync_all().map_err(|e| e.to_string())?;
 
             // Integrity verification
             let file = fs::File::open(&temp_zip_path).map_err(|e| e.to_string())?;
             let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
             for i in 0..archive.len() {
-                let _file = archive.by_index(i).map_err(|e| e.to_string())?;
+                let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+                // Read through EOF so decompression and CRC checks actually run.
+                std::io::copy(&mut entry, &mut std::io::sink()).map_err(|e| e.to_string())?;
             }
+            drop(archive);
 
-            // Atomic replace
-            fs::rename(&temp_zip_path, &dest_zip_path).map_err(|e| e.to_string())?;
+            // Never overwrite an archive created after our initial check.
+            crate::storage::publish_no_replace(&temp_zip_path, &dest_zip_path)
+                .map_err(|e| format!("无法安全保存归档（不会覆盖已有文件）: {e}"))?;
             Ok(())
         })();
 
-        if let Err(e) = result {
-            let _ = fs::remove_file(&temp_zip_path);
-            return Err(e);
-        }
+        let _ = fs::remove_file(&temp_zip_path);
+        result?;
 
         // Delete source files physically and from DB
         let mut count = 0;

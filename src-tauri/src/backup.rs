@@ -13,7 +13,7 @@ impl BackupManager {
         db: &DatabaseManager,
     ) -> Result<String, String> {
         // Ensure workspace directories and DB are synchronized before backing up
-        let _ = FileManager::scan_workspace_files(workspace_dir, db);
+        FileManager::scan_workspace_files(workspace_dir, db)?;
 
         let ws_root = Path::new(workspace_dir);
         if !ws_root.exists() {
@@ -64,6 +64,7 @@ impl BackupManager {
             }
 
             let dst_file = dest_path.join(rel_path);
+            let src_hash = FileManager::calculate_file_hash(&src_file)?;
 
             let mut need_copy = false;
             if !dst_file.exists() {
@@ -76,6 +77,9 @@ impl BackupManager {
 
                 if src_meta.len() != dst_meta.len() || (src_mtime - dst_mtime).abs() > 0.1 {
                     need_copy = true;
+                }
+                if !need_copy {
+                    need_copy = FileManager::calculate_file_hash(&dst_file)? != src_hash;
                 }
             }
 
@@ -111,6 +115,8 @@ impl BackupManager {
 
         // Update database statuses
         db.mark_as_backed_up(backed_up_rel_paths, backup_type).map_err(|e| e.to_string())?;
+        // Preserve tags, descriptions and backup history for disaster recovery.
+        db.snapshot_to(&dest_path.join(".docman.db"))?;
         db.add_backup_history(backup_type, copied_files_count, copied_bytes_count, "success").map_err(|e| e.to_string())?;
 
         let size_mb = copied_bytes_count as f64 / (1024.0 * 1024.0);

@@ -1,7 +1,7 @@
 {
   "name": "pro-max",
   "private": true,
-  "version": "3.2.3",
+  "version": "3.2.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,7 @@
     "version:check": "node scripts/version.mjs",
     "version:sync": "node scripts/version.mjs --sync",
     "release:prepare": "node scripts/prepare-release.mjs",
-    "test:workflow": "node --test scripts/workflow.test.mjs"
+    "test:workflow": "node --test scripts/workflow.test.mjs scripts/import.test.mjs scripts/update.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",

@@ -151,7 +151,7 @@ export default function DashboardPage({
   const proMaxSignals = [
     {
       icon: Inbox,
-      label: "Pro Inbox",
+      label: "智能收集箱",
       value: unorganizedCount,
       unit: "待处理",
       detail: "外部文件自动落入收集箱",
@@ -169,7 +169,7 @@ export default function DashboardPage({
     },
     {
       icon: ShieldCheck,
-      label: "3-2-1 Backup",
+      label: "备份保护",
       value: backupScore,
       unit: "分",
       detail: "本地盘、外置盘、云端三层保护",
@@ -178,7 +178,7 @@ export default function DashboardPage({
     },
     {
       icon: Layers,
-      label: "Workspace",
+      label: "工作空间",
       value: totalFiles,
       unit: "文件",
       detail: "结构化分类工作空间",
@@ -188,18 +188,18 @@ export default function DashboardPage({
   ];
 
   return (
-    <div style={{display: "flex", flexDirection: "column", gap: "20px", flex: 1, overflowY: "auto", paddingRight: "6px", height: "100%", paddingBottom: "24px"}}>
+    <div className="dashboard-page">
       <section className="pro-max-hero" style={{ flexShrink: 0 }}>
         <div className="pro-max-hero__copy">
           <span className="pro-max-kicker">Ledger Pro Max</span>
-          <h1>文档、归档、备份的高级控制台</h1>
+          <h1>让资料井然有序</h1>
           <p>
-            面向高强度学习、项目资料和长期资产管理，把自动收集、AI 标签、快速预览、查重清理和 3-2-1 备份放在同一个专业工作流里。
+            从收集、归档到备份，集中管理你的学习资料与项目文档。
           </p>
           <div className="pro-max-actions">
             <button className="btn btn-primary" onClick={() => setActiveTab("inbox")}>
               <Inbox size={16} />
-              处理 Pro Inbox
+              整理收集箱
             </button>
             <button className="btn" onClick={() => setActiveTab("workspace")}>
               <FolderOpen size={16} />
@@ -230,7 +230,7 @@ export default function DashboardPage({
       </section>
 
       {/* Metrics Grid */}
-      <div style={{display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px", flexShrink: 0}}>
+      <div className="dashboard-metrics">
         {/* Metric 1: 文件总数 */}
         <div className="cyber-card" style={{display: "flex", flexDirection: "column", gap: "8px", padding: "16px 20px", background: "linear-gradient(135deg, rgba(129, 140, 248, 0.05) 0%, rgba(129, 140, 248, 0.01) 100%)"}}>
           <div style={{display: "flex", alignItems: "center", gap: "8px", color: "var(--color-primary)"}}>
@@ -312,7 +312,7 @@ export default function DashboardPage({
       </div>
 
       {/* Charts Section */}
-      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", flexShrink: 0}}>
+      <div className="dashboard-columns">
         {/* Chart 1: Tag Distribution popularity */}
         <div className="cyber-card" style={{display: "flex", flexDirection: "column", gap: "16px", minHeight: "260px", position: "relative"}}>
           <h3 className="card-title">🏷️ 常用标签热度分布</h3>
@@ -515,7 +515,7 @@ export default function DashboardPage({
       </div>
 
       {/* System Health Grid */}
-      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", flexShrink: 0}}>
+      <div className="dashboard-columns">
         {/* Card 1: Desktop Cleanliness */}
         <div className="cyber-card" style={{display: "flex", flexDirection: "column", gap: "10px", padding: "16px 20px"}}>
           <h3 className="card-title">🧹 本地桌面整理状况</h3>

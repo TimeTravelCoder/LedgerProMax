@@ -14,13 +14,13 @@ export function checkVersion(root = projectRoot, tag) {
   const manifest = read(root, 'src-tauri/Cargo.toml');
   const cargoLock = read(root, 'src-tauri/Cargo.lock');
   const packageBlock = manifest.match(/\[package\]([\s\S]*?)(?=\n\[|$)/)?.[1];
-  const appBlock = cargoLock.split('[[package]]').find(block => /^name = "app"$/m.test(block));
+  const appBlock = cargoLock.split('[[package]]').find(block => /^name = "app"\r?$/m.test(block));
   const versions = {
     'package-lock.json': npmLock.version,
     'package-lock.json packages[""]': npmLock.packages?.['']?.version,
     'src-tauri/tauri.conf.json': json(root, 'src-tauri/tauri.conf.json').version,
-    'src-tauri/Cargo.toml': packageBlock?.match(/^version = "([^"]+)"$/m)?.[1],
-    'src-tauri/Cargo.lock (app)': appBlock?.match(/^version = "([^"]+)"$/m)?.[1],
+    'src-tauri/Cargo.toml': packageBlock?.match(/^version = "([^"]+)"\r?$/m)?.[1],
+    'src-tauri/Cargo.lock (app)': appBlock?.match(/^version = "([^"]+)"\r?$/m)?.[1],
   };
   for (const [file, value] of Object.entries(versions)) {
     if (value !== version) throw new Error(`${file}: ${value} != package.json ${version}`);
@@ -40,7 +40,7 @@ export function syncVersion(root = projectRoot, requestedVersion) {
   const manifest = read(root, 'src-tauri/Cargo.toml');
   const lock = read(root, 'src-tauri/Cargo.lock');
   if (!npmLock.packages?.[''] || !/\[package\][\s\S]*?^version = "[^"]+"/m.test(manifest)
-      || !/name = "app"\nversion = "[^"]+"/.test(lock)) {
+      || !/name = "app"\r?\nversion = "[^"]+"/.test(lock)) {
     throw new Error('Expected package/version entries are missing; no files changed');
   }
   packageJson.version = npmLock.version = npmLock.packages[''].version = tauri.version = version;
@@ -50,7 +50,7 @@ export function syncVersion(root = projectRoot, requestedVersion) {
     }
   }
   writeFileSync(resolve(root, 'src-tauri/Cargo.toml'), manifest.replace(/(\[package\][\s\S]*?^version = ")[^"]+"/m, `$1${version}"`));
-  writeFileSync(resolve(root, 'src-tauri/Cargo.lock'), lock.replace(/(name = "app"\nversion = ")[^"]+"/, `$1${version}"`));
+  writeFileSync(resolve(root, 'src-tauri/Cargo.lock'), lock.replace(/(name = "app"\r?\nversion = ")[^"]+"/, `$1${version}"`));
   return checkVersion(root);
 }
 

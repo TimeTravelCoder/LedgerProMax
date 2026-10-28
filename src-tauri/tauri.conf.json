@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Ledger Pro Max",
-  "version": "3.2.3",
+  "version": "3.2.4",
   "identifier": "com.timetravelcoder.ledgerpromax",
   "build": {
     "frontendDist": "../dist",
@@ -12,9 +12,13 @@
   "app": {
     "windows": [
       {
-        "title": "👑 Ledger Pro Max",
-        "width": 1024,
-        "height": 768,
+        "title": "Ledger Pro Max",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 640,
+        "maximized": true,
+        "center": true,
         "resizable": true,
         "fullscreen": false
       }
@@ -47,7 +51,10 @@
         "language": "zh-CN"
       },
       "nsis": {
-        "languages": ["SimpChinese", "English"],
+        "languages": [
+          "SimpChinese",
+          "English"
+        ],
         "installerIcon": "icons/icon.ico"
       }
     },
