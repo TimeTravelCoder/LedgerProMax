@@ -23,8 +23,9 @@ import {
   X
 } from "lucide-react";
 
-import type { FileRecord, BackupHistoryRecord, AutoRule, PathValidation, PathValidationMap } from "./types";
-import { standardDirPresets, standardDirsZhFull, processFileRecord, getFileIcon } from "./utils/fileUtils";
+import type { FileRecord, BackupHistoryRecord, AutoRule, PathValidation, PathValidationMap, WorkspaceTemplate } from "./types";
+import { processFileRecord, getFileIcon } from "./utils/fileUtils";
+import { getWorkspaceDirectories, mergeWorkspaceDirectories, readWorkspaceTemplates, resolveRuleDirectory, validateDirectoryName, validateWorkspaceTemplate } from "./utils/workspaceTemplates";
 
 import DashboardPage from "./components/pages/DashboardPage";
 import InboxPage from "./components/pages/InboxPage";
@@ -42,7 +43,7 @@ export default function App() {
 
   // App State Restoration
   const [newFolderInput, setNewFolderInput] = useState("");
-  const [createFolderRoot, setCreateFolderRoot] = useState("01课程学习");
+  const [createFolderRoot, setCreateFolderRoot] = useState("");
   const [createFolderSubpath, setCreateFolderSubpath] = useState("");
   const [selectedWorkspaceFile, setSelectedWorkspaceFile] = useState<FileRecord | null>(null);
   const selectedWorkspaceFileRef = useRef(selectedWorkspaceFile);
@@ -114,7 +115,12 @@ export default function App() {
   const workspaceDirRef = useRef(workspaceDir);
   useEffect(() => { workspaceDirRef.current = workspaceDir; }, [workspaceDir]);
   const [workspaceLang, setWorkspaceLang] = useState<string>("zh-full");
-  const inboxName = (standardDirPresets[workspaceLang] || standardDirsZhFull)[0] || "00收集箱";
+  const [customWorkspaceTemplates, setCustomWorkspaceTemplates] = useState<WorkspaceTemplate[]>([]);
+  const [activeWorkspaceLang, setActiveWorkspaceLang] = useState("zh-full");
+  const [activeWorkspaceTemplates, setActiveWorkspaceTemplates] = useState<WorkspaceTemplate[]>([]);
+  const [workspaceRootDirs, setWorkspaceRootDirs] = useState<string[]>([]);
+  const standardDirs = useMemo(() => mergeWorkspaceDirectories(getWorkspaceDirectories(activeWorkspaceLang, activeWorkspaceTemplates), workspaceRootDirs), [activeWorkspaceLang, activeWorkspaceTemplates, workspaceRootDirs]);
+  const inboxName = standardDirs[0] || "00收集箱";
   const inboxNameRef = useRef(inboxName);
   useEffect(() => { inboxNameRef.current = inboxName; }, [inboxName]);
   const [monitoredDirs, setMonitoredDirs] = useState<string>("");
@@ -223,7 +229,7 @@ export default function App() {
     setConfirmation(null);
   };
   const draftSnapshot = JSON.stringify({ tempWorkspaceDir, tempMonitoredDirs, tempBackupDiskDir, tempBackupCloudDir,
-    workspaceLang, tagsState, autoRulesState, namingTemplates });
+    workspaceLang, customWorkspaceTemplates, tagsState, autoRulesState, namingTemplates });
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
   useEffect(() => {
     if (configLoaded && savedSnapshot === null) setSavedSnapshot(draftSnapshot);
@@ -263,9 +269,6 @@ export default function App() {
   });
 
 
-  const standardDirs = useMemo(() => {
-    return standardDirPresets[workspaceLang] || standardDirsZhFull;
-  }, [workspaceLang]);
 
   useEffect(() => {
     if (!selectedCategory) return;
@@ -332,7 +335,7 @@ const normalizeTag = (value: string) => {
     return "";
   };
 
-  const getRuleTargetDir = (prefix: string) => standardDirs.find(dir => dir.startsWith(prefix)) || `${prefix}*`;
+  const getRuleTargetDir = (prefix: string) => resolveRuleDirectory(standardDirs, prefix) || "";
 
   const getRuleMatch = (filename: string, rules = autoRulesState) => {
     const lowerName = filename.trim().toLowerCase();
@@ -344,6 +347,7 @@ const normalizeTag = (value: string) => {
       const extensionHit = rule.extensions.map(e => e.toLowerCase()).includes(ext);
       const keywordHit = rule.keywords.some(keyword => keyword.trim() && lowerName.includes(keyword.toLowerCase()));
       if (extensionHit || keywordHit) {
+        if (!getRuleTargetDir(rule.target_prefix)) continue;
         return { rule, directory: getRuleTargetDir(rule.target_prefix), reason: extensionHit ? `扩展名 ${ext}` : "关键字命中" };
       }
     }
@@ -361,10 +365,10 @@ const normalizeTag = (value: string) => {
 
 
 
-  const handleInitWorkspace = async (targetDir?: string) => {
+  const handleInitWorkspace = async (targetDir?: string, targetDirs?: string[]) => {
     const dir = targetDir || workspaceDir;
     try {
-      await invoke("init_workspace", { workspaceDir: dir, dirs: standardDirs });
+      await invoke("init_workspace", { workspaceDir: dir, dirs: targetDirs || standardDirs });
       await handleScanWorkspace(dir);
       addLog("工作空间初始化成功！标准目录已建立。");
     } catch (err: any) {
@@ -491,17 +495,21 @@ const normalizeTag = (value: string) => {
 
   const handleRefreshData = async () => {
     try {
-      const [sum, rawFiles, hist] = (await Promise.all([
+      const requestedDir = workspaceDirRef.current;
+      const [sum, rawFiles, hist, roots] = (await Promise.all([
         invoke("get_desktop_summary"),
         invoke("search_files", { workspaceDir: workspaceDirRef.current }),
-        invoke("get_backup_history", { workspaceDir: workspaceDirRef.current, limit: 10 })
-      ])) as [any, any[], any];
+        invoke("get_backup_history", { workspaceDir: requestedDir, limit: 10 }),
+        invoke<string[]>("list_workspace_directories", { workspaceDir: requestedDir })
+      ])) as [any, any[], any, string[]];
+      if (requestedDir !== workspaceDirRef.current) return [];
+      setWorkspaceRootDirs(roots);
 
       const allFiles = rawFiles.map(processFileRecord);
 
       setDesktopSummary(sum);
 
-      const isInbox = (fp: string) => fp.startsWith(`${inboxName}/`);
+      const isInbox = (fp: string) => fp.startsWith(`${inboxNameRef.current}/`);
       const inboxList = allFiles.filter(f => isInbox(f.filepath.replace(/\\/g, "/")));
       setInboxFiles(inboxList);
 
@@ -572,12 +580,14 @@ const normalizeTag = (value: string) => {
       let resolvedWorkspaceDir = workspaceDir;
       let resolvedMonitoredDirs = monitoredDirs;
       let resolvedWorkspaceLang = "zh-full";
+      let resolvedWorkspaceTemplates: WorkspaceTemplate[] = [];
       try {
         const config: any = await invoke("load_config");
         if (config) {
           resolvedWorkspaceDir = config.workspace_dir || workspaceDir;
           resolvedMonitoredDirs = (config.monitored_dirs || []).join(", ");
 
+          workspaceDirRef.current = resolvedWorkspaceDir;
           setWorkspaceDir(resolvedWorkspaceDir);
           setMonitoredDirs(resolvedMonitoredDirs);
           setBackupDiskDir(config.backup_disk_dir || "");
@@ -588,10 +598,14 @@ const normalizeTag = (value: string) => {
           setTempBackupDiskDir(config.backup_disk_dir || "");
           setTempBackupCloudDir(config.backup_cloud_dir || "");
           
-          if (config.workspace_lang) {
-            resolvedWorkspaceLang = config.workspace_lang || "zh-full";
-            setWorkspaceLang(resolvedWorkspaceLang);
-          }
+          resolvedWorkspaceTemplates = readWorkspaceTemplates(config.custom_workspace_templates);
+          resolvedWorkspaceLang = config.workspace_lang || "zh-full";
+          if (resolvedWorkspaceLang.startsWith("custom:") && !resolvedWorkspaceTemplates.some(item => `custom:${item.id}` === resolvedWorkspaceLang)) resolvedWorkspaceLang = "zh-full";
+          setCustomWorkspaceTemplates(resolvedWorkspaceTemplates);
+          setActiveWorkspaceTemplates(resolvedWorkspaceTemplates);
+          setWorkspaceLang(resolvedWorkspaceLang);
+          setActiveWorkspaceLang(resolvedWorkspaceLang);
+          inboxNameRef.current = getWorkspaceDirectories(resolvedWorkspaceLang, resolvedWorkspaceTemplates)[0];
 
           // Fallback loaded theme to light/dark
           // Fallback loaded theme to light/dark
@@ -614,7 +628,7 @@ const normalizeTag = (value: string) => {
 
       // Initialize workspace & scan with the resolved (loaded) path — NOT the stale state value
       try {
-        const dirsToInit = standardDirPresets[resolvedWorkspaceLang] || standardDirsZhFull;
+        const dirsToInit = getWorkspaceDirectories(resolvedWorkspaceLang, resolvedWorkspaceTemplates);
         await invoke("init_workspace", { workspaceDir: resolvedWorkspaceDir, dirs: dirsToInit });
         await invoke("scan_workspace", { workspaceDir: resolvedWorkspaceDir });
         await handleRefreshData();
@@ -833,6 +847,14 @@ const normalizeTag = (value: string) => {
       return;
     }
 
+    for (const template of customWorkspaceTemplates) {
+      const error = validateWorkspaceTemplate(template, customWorkspaceTemplates);
+      if (error) { setSaveStatus("error"); setSaveMessage(error); showToast(error, "warning"); return; }
+    }
+    if (workspaceLang.startsWith("custom:") && !customWorkspaceTemplates.some(item => `custom:${item.id}` === workspaceLang)) {
+      setSaveStatus("error"); setSaveMessage("请选择有效的目录模板。"); return;
+    }
+    const dirsToSave = getWorkspaceDirectories(workspaceLang, customWorkspaceTemplates);
     const snapshotToSave = draftSnapshot;
     setSaveStatus("saving");
     setSaveMessage("正在保存设置…");
@@ -848,6 +870,7 @@ const normalizeTag = (value: string) => {
         auto_rule_enabled: true,
         tags: tagsState,
         workspace_lang: workspaceLang,
+        custom_workspace_templates: customWorkspaceTemplates,
         auto_rules: autoRulesState,
         custom_name_templates: namingTemplates.filter(t => t.key.startsWith("custom_"))
       };
@@ -855,6 +878,11 @@ const normalizeTag = (value: string) => {
       setSavedSnapshot(snapshotToSave);
 
       // 同步核心全局 state
+      workspaceDirRef.current = tempWorkspaceDir;
+      inboxNameRef.current = dirsToSave[0];
+      setWorkspaceRootDirs([]);
+      setActiveWorkspaceLang(workspaceLang);
+      setActiveWorkspaceTemplates(customWorkspaceTemplates);
       setWorkspaceDir(tempWorkspaceDir);
       setMonitoredDirs(tempMonitoredDirs);
       setBackupDiskDir(tempBackupDiskDir);
@@ -865,7 +893,7 @@ const normalizeTag = (value: string) => {
       setSaveMessage("配置已保存，工作空间与监听规则已同步。");
 
       // 立即使用保存的新路径初始化与扫描，避免取旧 state 的延迟
-      await handleInitWorkspace(tempWorkspaceDir);
+      await handleInitWorkspace(tempWorkspaceDir, dirsToSave);
       
       // 🚀 即时热更新后台多目录监听器，避免状态延迟
       await handleStartWatching(tempMonitoredDirs);
@@ -1022,6 +1050,14 @@ const handleAddOrUpdateRule = () => {
     }
   };
 
+  const openCreateFolder = (atRoot = false) => {
+    const parts = selectedCategory?.split("/") || [];
+    setCreateFolderRoot(atRoot ? "" : parts[0] || "");
+    setCreateFolderSubpath(atRoot ? "" : parts.slice(1).join("/"));
+    setNewFolderInput("");
+    setIsCreateFolderExpanded(true);
+  };
+
   // Build Free Folder
   const handleCreateFolder = async () => {
     if (!canCreateFolder) {
@@ -1033,6 +1069,9 @@ const handleAddOrUpdateRule = () => {
       addLog(`新建文件夹成功: ${folderFinalPath}`);
       showToast(`新建文件夹成功: ${folderFinalPath}`, "success");
       setNewFolderInput("");
+      setCreateFolderSubpath("");
+      setIsCreateFolderExpanded(false);
+      setSelectedCategory(folderFinalParts[0] || null);
       await handleRefreshData();
     } catch (err: any) {
       addLog(`[错误] 文件夹创建失败: ${err}`);
@@ -1276,7 +1315,7 @@ const handleAddOrUpdateRule = () => {
       if (!creatableRoots.includes(createFileRoot)) {
         setCreateFileRoot(creatableRoots[0]);
       }
-      if (!creatableRoots.includes(createFolderRoot)) {
+      if (createFolderRoot && !creatableRoots.includes(createFolderRoot)) {
         setCreateFolderRoot(creatableRoots[0]);
       }
     }
@@ -1286,10 +1325,10 @@ const handleAddOrUpdateRule = () => {
   const folderFinalParts = [createFolderRoot, normalizedFolderSubpath, normalizedFolderName].filter(Boolean);
   const folderFinalPath = folderFinalParts.join("/");
   const folderDepth = folderFinalParts.flatMap(part => part.split("/").filter(Boolean)).length;
-  const folderNameError = validateWorkspacePathParts(newFolderInput, { allowSlash: false });
+  const folderNameError = validateDirectoryName(newFolderInput.trim()) || validateWorkspacePathParts(newFolderInput, { allowSlash: false });
   const folderSubpathError = createFolderSubpath.trim() ? validateWorkspacePathParts(createFolderSubpath, { allowSlash: true }) : "";
   const folderValidationMessage = folderNameError || folderSubpathError || (folderDepth > 4 ? `目录深度 ${folderDepth}/4，超过工作区规范。` : "");
-  const canCreateFolder = !folderValidationMessage && folderDepth >= 2 && folderDepth <= 4;
+  const canCreateFolder = !folderValidationMessage && folderDepth >= 1 && folderDepth <= 4;
   const resolvedCreateFileRoot = createFileRoot || "01课程学习";
   const normalizedFileSubpath = normalizeWorkspacePathInput(createFileSubpath);
   const normalizedFileName = newFileInput.trim();
@@ -1606,7 +1645,8 @@ const handleAddOrUpdateRule = () => {
               workspaceDir={workspaceDir}
               createFolderRoot={createFolderRoot}
               createFileRoot={createFileRoot}
-              setIsCreateFolderExpanded={setIsCreateFolderExpanded}
+              setIsCreateFolderExpanded={expanded => { if (expanded) openCreateFolder(); else setIsCreateFolderExpanded(false); }}
+              onCreateRootFolder={() => openCreateFolder(true)}
               setIsCreateFileExpanded={setIsCreateFileExpanded}
               handleDeleteFile={handleDeleteFile}
               selectedWorkspaceFile={selectedWorkspaceFile}
@@ -1657,6 +1697,8 @@ const handleAddOrUpdateRule = () => {
               setTempBackupCloudDir={setTempBackupCloudDir}
               pathValidation={pathValidation}
               workspaceLang={workspaceLang}
+              customWorkspaceTemplates={customWorkspaceTemplates}
+              setCustomWorkspaceTemplates={setCustomWorkspaceTemplates}
               setWorkspaceLang={setWorkspaceLang}
               standardDirs={standardDirs}
               tagsState={tagsState}
@@ -1722,13 +1764,14 @@ const handleAddOrUpdateRule = () => {
         <div style={{ position: "fixed", inset: 0, zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}>
           <div style={{ width: "400px", background: theme === "light" ? "#fff" : "#1e1e1e", borderRadius: "16px", padding: "24px", boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}><FolderPlus size={18} className="primary" /> 新建子目录</h3>
+              <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}><FolderPlus size={18} className="primary" /> {createFolderRoot ? "新建子文件夹" : "新建一级文件夹"}</h3>
               <button onClick={() => setIsCreateFolderExpanded(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)" }}><X size={18} /></button>
             </div>
             <div className="create-mini-form" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div className="create-field" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label style={{ fontSize: "12px", color: "var(--text-muted)" }}>根目录</label>
-                <select value={createFolderRoot} onChange={(e) => setCreateFolderRoot(e.target.value)} className="input-field">
+                <select value={createFolderRoot} onChange={(e) => { setCreateFolderRoot(e.target.value); setCreateFolderSubpath(""); }} className="input-field">
+                  <option value="">工作区根目录（新建一级文件夹）</option>
                   {creatableRoots.map(dir => <option key={dir} value={dir}>{dir}</option>)}
                 </select>
               </div>
@@ -1766,7 +1809,7 @@ const handleAddOrUpdateRule = () => {
               <div style={{ fontSize: "12px", color: folderValidationMessage ? "var(--color-danger)" : "var(--color-success)" }}>
                 {folderValidationMessage || "✓ 路径符合工作区 4 层规范。"}
               </div>
-              <button className="btn btn-primary" disabled={!canCreateFolder} onClick={() => { handleCreateFolder(); setIsCreateFolderExpanded(false); }} style={{ width: "100%", padding: "12px", marginTop: "8px", display: "flex", justifyContent: "center", gap: "8px" }}>
+              <button className="btn btn-primary" disabled={!canCreateFolder} onClick={handleCreateFolder} style={{ width: "100%", padding: "12px", marginTop: "8px", display: "flex", justifyContent: "center", gap: "8px" }}>
                 <Plus size={16} /> 创建目录
               </button>
             </div>

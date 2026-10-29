@@ -36,3 +36,9 @@ export interface PathValidation {
 }
 
 export type PathValidationMap = Record<"workspace" | "monitor" | "disk" | "cloud", PathValidation | null>;
+
+export interface WorkspaceTemplate {
+  id: string;
+  name: string;
+  dirs: string[];
+}

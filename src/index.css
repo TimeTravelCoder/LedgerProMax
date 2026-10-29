@@ -1933,3 +1933,12 @@ input[type="checkbox"]:checked::after {
 .update-error-details summary { cursor: pointer; }
 .update-error-details pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .update-progress { display: block; width: 100%; height: 8px; margin-top: 14px; accent-color: var(--accent-primary, #2563eb); }
+.workspace-template-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.workspace-template-toolbar > select { flex: 1; min-width: 220px; }
+.workspace-template-editor { display: grid; gap: 10px; margin-top: 12px; padding: 16px; border: 1px solid var(--border-light); border-radius: 10px; background: var(--bg-secondary); }
+.workspace-template-editor h5 { margin: 0; font-size: 14px; }
+.workspace-template-editor textarea { resize: vertical; line-height: 1.7; }
+.workspace-template-preview { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; list-style: none; padding: 0; max-height: 220px; overflow-y: auto; }
+.workspace-template-preview li { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 8px; border-radius: 6px; background: var(--bg-primary); }
+.workspace-template-preview li span { overflow-wrap: anywhere; }
+.workspace-template-preview small { color: var(--text-muted); margin-left: auto; white-space: nowrap; }

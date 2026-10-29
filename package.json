@@ -14,7 +14,7 @@
     "version:check": "node scripts/version.mjs",
     "version:sync": "node scripts/version.mjs --sync",
     "release:prepare": "node scripts/prepare-release.mjs",
-    "test:workflow": "node --test scripts/workflow.test.mjs scripts/import.test.mjs scripts/update.test.mjs scripts/project-links.test.mjs"
+    "test:workflow": "node --test scripts/workflow.test.mjs scripts/import.test.mjs scripts/update.test.mjs scripts/project-links.test.mjs scripts/workspace-templates.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",

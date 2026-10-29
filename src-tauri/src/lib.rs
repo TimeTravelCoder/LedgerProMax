@@ -5,6 +5,7 @@ mod semantic;
 mod watcher;
 mod config_manager;
 mod storage;
+mod workspace_templates;
 
 #[cfg(test)]
 mod regression_tests;
@@ -26,6 +27,11 @@ pub struct WatcherState {
 #[tauri::command]
 async fn init_workspace(workspace_dir: String, dirs: Vec<String>) -> Result<(), String> {
     FileManager::init_workspace(&workspace_dir, dirs)
+}
+
+#[tauri::command]
+fn list_workspace_directories(workspace_dir: String) -> Result<Vec<String>, String> {
+    FileManager::list_workspace_directories(&workspace_dir)
 }
 
 #[tauri::command]
@@ -236,11 +242,11 @@ fn suggest_rule_target(filename: String, auto_rules: Vec<serde_json::Value>, sta
             .collect();
 
         if extensions.contains(&ext) || keywords.iter().any(|kw| lower_name.contains(kw)) {
-            for directory in &standard_dirs {
-                if directory.starts_with(prefix) {
-                    return Some((rule_name, directory.clone()));
-                }
-            }
+            let directory = standard_dirs.iter().find(|dir| dir.as_str() == prefix)
+                .or_else(|| if prefix.len() == 2 && prefix.chars().all(|c| c.is_ascii_alphanumeric()) {
+                    standard_dirs.iter().find(|dir| dir.starts_with(prefix))
+                } else { None });
+            if let Some(directory) = directory { return Some((rule_name, directory.clone())); }
         }
     }
     None
@@ -573,6 +579,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             init_workspace,
+            list_workspace_directories,
             init_project,
             create_folder,
             create_file,

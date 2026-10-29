@@ -37,6 +37,7 @@ interface WorkspacePageProps {
   createFolderRoot: string;
   createFileRoot: string;
   setIsCreateFolderExpanded: (expanded: boolean) => void;
+  onCreateRootFolder: () => void;
   setIsCreateFileExpanded: (expanded: boolean) => void;
   handleDeleteFile: (filepath: string) => void;
   selectedWorkspaceFile: FileRecord | null;
@@ -71,6 +72,7 @@ export default function WorkspacePage({
   createFolderRoot,
   createFileRoot,
   setIsCreateFolderExpanded,
+  onCreateRootFolder,
   setIsCreateFileExpanded,
   handleDeleteFile,
   selectedWorkspaceFile,
@@ -249,6 +251,7 @@ export default function WorkspacePage({
           </button>
         </div>
         
+        <button type="button" className="btn" onClick={onCreateRootFolder} style={{ width: "100%", margin: "8px 0" }}><FolderPlus size={15} />新建一级文件夹</button>
         {/* Standard Folders Tree */}
         <div className="workspace-tree-list">
           {standardDirs.map((dir, idx) => {
@@ -367,8 +370,8 @@ export default function WorkspacePage({
                 <FolderPlus size={18} />
               </div>
               <div style={{textAlign: "left"}}>
-                <div style={{fontWeight: 600, fontSize: "14px", color: "var(--text-primary)"}}>新建子目录</div>
-                <div style={{fontSize: "12px", color: "var(--text-muted)", marginTop: "2px"}}>{createFolderRoot.replace(/^\d+/, "") || "选择分类"}</div>
+                <div style={{fontWeight: 600, fontSize: "14px", color: "var(--text-primary)"}}>新建文件夹</div>
+                <div style={{fontSize: "12px", color: "var(--text-muted)", marginTop: "2px"}}>{createFolderRoot.replace(/^\d+/, "") || "工作区根目录"}</div>
               </div>
             </div>
             <ChevronRight size={16} style={{color: "var(--text-muted)"}} />

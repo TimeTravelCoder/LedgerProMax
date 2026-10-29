@@ -1,3 +1,4 @@
+use crate::workspace_templates::{WorkspaceTemplate, validate_templates};
 use std::path::PathBuf;
 use std::fs;
 use serde::{Deserialize, Serialize};
@@ -35,6 +36,8 @@ pub struct AppConfig {
     pub auto_rule_enabled: bool,
     pub tags: TagGroups,
     pub workspace_lang: String,
+    #[serde(default)]
+    pub custom_workspace_templates: Vec<WorkspaceTemplate>,
     pub auto_rules: Vec<AutoRule>,
     pub custom_name_templates: Vec<serde_json::Value>,
 }
@@ -86,6 +89,7 @@ impl Default for AppConfig {
                 ],
             },
             workspace_lang: "zh-full".to_string(),
+            custom_workspace_templates: Vec::new(),
             auto_rules: vec![
                 AutoRule {
                     name: "论文文档".to_string(),
@@ -174,6 +178,7 @@ impl ConfigManager {
     }
 
     pub fn save_config(config: &AppConfig) -> Result<(), String> {
+        validate_templates(&config.custom_workspace_templates, &config.workspace_lang)?;
         let path = Self::get_config_path();
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);

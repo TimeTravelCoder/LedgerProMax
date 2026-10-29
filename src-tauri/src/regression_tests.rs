@@ -120,3 +120,25 @@ fn snapshot_includes_committed_wal_changes_and_can_replace_a_previous_snapshot()
     let description: String = backup.query_row("SELECT description FROM files", [], |row| row.get(0)).unwrap();
     assert_eq!(description, "committed in WAL");
 }
+
+#[test]
+fn root_folders_are_created_and_discovered_even_when_empty() {
+    let fixture = Fixture::new();
+    let root = fixture.0.to_str().unwrap();
+    FileManager::init_workspace(root, vec!["待处理".into(), "客户项目".into()]).unwrap();
+    FileManager::create_folder("合同资料", root).unwrap();
+    let dirs = FileManager::list_workspace_directories(root).unwrap();
+    assert!(dirs.contains(&"合同资料".to_string()));
+    assert!(fixture.0.join("合同资料").is_dir());
+    assert!(FileManager::create_folder("../outside", root).is_err());
+    assert!(FileManager::init_workspace(root, vec!["../outside".into()]).is_err());
+    assert!(FileManager::init_workspace(root, vec!["CON".into()]).is_err());
+}
+
+#[test]
+fn old_configurations_without_custom_templates_still_deserialize() {
+    let mut old = serde_json::to_value(crate::config_manager::AppConfig::default()).unwrap();
+    old.as_object_mut().unwrap().remove("custom_workspace_templates");
+    let config: crate::config_manager::AppConfig = serde_json::from_value(old).unwrap();
+    assert!(config.custom_workspace_templates.is_empty());
+}

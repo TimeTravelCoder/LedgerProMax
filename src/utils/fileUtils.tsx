@@ -1,39 +1,7 @@
 
 import type { FileRecord } from "../types";
 
-export const standardDirsZhFull = [
-  "00收集箱", "01课程学习", "02课题研究", "03项目管理", "04代码仓库",
-  "05学术论文", "06知识笔记", "07常用资源", "08演示汇报", "09个人简历",
-  "10归档区", "99临时缓冲"
-];
-
-export const standardDirsZhMin = [
-  "00收集箱", "01课程学习", "02课题研究", "03项目管理",
-  "10归档区", "99临时缓冲"
-];
-
-export const standardDirsEnFull = [
-  "00Inbox", "01Courses", "02Research", "03Projects", "04Code",
-  "05Papers", "06Notes", "07Resources", "08Slides", "09Resumes",
-  "10Archive", "99Sandbox"
-];
-
-export const standardDirsEnMin = [
-  "00Inbox", "01Courses", "02Research", "03Projects",
-  "10Archive", "99Sandbox"
-];
-
-export const standardDirsZhBasic = ["A0-收集箱"];
-export const standardDirsEnBasic = ["A0-Inbox"];
-
-export const standardDirPresets: Record<string, string[]> = {
-  "zh-full": standardDirsZhFull,
-  "zh-min": standardDirsZhMin,
-  "zh-basic": standardDirsZhBasic,
-  "en-full": standardDirsEnFull,
-  "en-min": standardDirsEnMin,
-  "en-basic": standardDirsEnBasic,
-};
+export { standardDirPresets, standardDirsZhFull } from "./workspaceTemplates";
 
 export function processFileRecord(f: any): FileRecord {
   let parsedTags: string[] = [];

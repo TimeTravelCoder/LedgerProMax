@@ -16,8 +16,9 @@ import {
   Download,
   RotateCcw
 } from "lucide-react";
-import type { AutoRule, TagGroupKey, PathValidationMap } from "../../types";
-import { standardDirPresets } from "../../utils/fileUtils";
+import type { AutoRule, TagGroupKey, PathValidationMap, WorkspaceTemplate } from "../../types";
+import WorkspaceTemplateEditor from "./WorkspaceTemplateEditor";
+import { getWorkspaceDirectories, mergeWorkspaceDirectories, resolveRuleDirectory } from "../../utils/workspaceTemplates";
 import { invoke } from "@tauri-apps/api/core";
 import AboutPage from "./AboutPage";
 
@@ -38,6 +39,8 @@ interface SettingsPageProps {
   tempBackupCloudDir: string;
   setTempBackupCloudDir: (dir: string) => void;
   pathValidation: PathValidationMap;
+  customWorkspaceTemplates: WorkspaceTemplate[];
+  setCustomWorkspaceTemplates: (templates: WorkspaceTemplate[]) => void;
   workspaceLang: string;
   setWorkspaceLang: (lang: string) => void;
   standardDirs: string[];
@@ -83,6 +86,8 @@ export default function SettingsPage({
   tempBackupCloudDir,
   setTempBackupCloudDir,
   pathValidation,
+  customWorkspaceTemplates,
+  setCustomWorkspaceTemplates,
   workspaceLang,
   setWorkspaceLang,
   standardDirs,
@@ -127,6 +132,8 @@ export default function SettingsPage({
   // AutoRule inputs
   const [newRuleName, setNewRuleName] = useState("");
   const [newRulePrefix, setNewRulePrefix] = useState("01");
+  const ruleDirectories = mergeWorkspaceDirectories(getWorkspaceDirectories(workspaceLang, customWorkspaceTemplates), standardDirs);
+  const selectedRuleDirectory = resolveRuleDirectory(ruleDirectories, newRulePrefix) || ruleDirectories[1] || ruleDirectories[0] || "";
   const [newRuleKeywords, setNewRuleKeywords] = useState("");
   const [newRuleExtensions, setNewRuleExtensions] = useState("");
   const [editingRuleIndex, setEditingRuleIndex] = useState<number | null>(null);
@@ -150,7 +157,7 @@ export default function SettingsPage({
     return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
   };
 
-  const getRuleTargetDir = (prefix: string) => standardDirs.find(dir => dir.startsWith(prefix)) || `${prefix}*`;
+  const getRuleTargetDir = (prefix: string) => resolveRuleDirectory(ruleDirectories, prefix) || "目录不在当前工作区中";
 
   const getRuleMatch = (filename: string, rules = autoRulesState) => {
     const lowerName = filename.trim().toLowerCase();
@@ -162,6 +169,7 @@ export default function SettingsPage({
       const extensionHit = rule.extensions.map(e => e.toLowerCase()).includes(ext);
       const keywordHit = rule.keywords.some(keyword => keyword.trim() && lowerName.includes(keyword.toLowerCase()));
       if (extensionHit || keywordHit) {
+        if (!resolveRuleDirectory(ruleDirectories, rule.target_prefix)) continue;
         return { rule, directory: getRuleTargetDir(rule.target_prefix), reason: extensionHit ? `扩展名 ${ext}` : "关键字命中" };
       }
     }
@@ -183,7 +191,7 @@ export default function SettingsPage({
       name: newRuleName.trim(),
       keywords: parseListInput(newRuleKeywords),
       extensions: parseListInput(newRuleExtensions).map(normalizeExtension).filter(Boolean),
-      target_prefix: newRulePrefix,
+      target_prefix: selectedRuleDirectory,
       enabled: true
     };
 
@@ -530,28 +538,7 @@ export default function SettingsPage({
               );
             })}
 
-            {/* 🆕 Workspace Initialization Specification Selector */}
-            <div className="settings-field settings-field--wide settings-workspace-preset">
-              <label htmlFor="workspace-preset">工作空间目录模板</label>
-              <select
-                value={workspaceLang}
-                id="workspace-preset"
-                onChange={(e) => setWorkspaceLang(e.target.value)}
-                className="input-field"
-                style={{ cursor: "pointer" }}
-              >
-                <option value="zh-full">中文标准版 (12 个目录 — 课程/研究/项目/代码/论文/笔记/资源等)</option>
-                <option value="zh-min">中文精简版 (6 个目录 — 课程/研究/项目/归档)</option>
-                <option value="zh-basic">中文基础版 (1 个目录 — A0-收集箱)</option>
-                <option value="en-full">English Standard (12 dirs)</option>
-                <option value="en-min">English Minimal (6 dirs)</option>
-                <option value="en-basic">English Basic (1 dir — A0-Inbox)</option>
-              </select>
-              <div className="settings-status ok" style={{ marginTop: "6px" }}>
-                当前模板将创建 <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{(standardDirPresets[workspaceLang] || standardDirPresets["zh-full"]).length}</span> 个基础目录：
-                <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{(standardDirPresets[workspaceLang] || standardDirPresets["zh-full"]).slice(0, 6).join("、")}{ (standardDirPresets[workspaceLang] || standardDirPresets["zh-full"]).length > 6 ? "..." : "" }</span>
-              </div>
-            </div>
+            <WorkspaceTemplateEditor selection={workspaceLang} onSelect={setWorkspaceLang} templates={customWorkspaceTemplates} onTemplatesChange={setCustomWorkspaceTemplates} currentDirs={standardDirs} />
           </div>
         </section>
       )}
@@ -721,8 +708,8 @@ export default function SettingsPage({
                 </div>
                 <div className="settings-field">
                   <label htmlFor="rule-directory">目标目录</label>
-                  <select id="rule-directory" value={newRulePrefix} onChange={(e) => setNewRulePrefix(e.target.value)} className="input-field">
-                    {standardDirs.map(dir => <option key={dir} value={dir.substring(0, 2)}>{dir}</option>)}
+                  <select id="rule-directory" value={selectedRuleDirectory} onChange={(e) => setNewRulePrefix(e.target.value)} className="input-field">
+                    {ruleDirectories.map(dir => <option key={dir} value={dir}>{dir}</option>)}
                   </select>
                 </div>
                 <div className="settings-field">
@@ -853,7 +840,7 @@ export default function SettingsPage({
               setTempBackupDiskDir(""); setTempBackupCloudDir("");
               setTagsState({primary: [], secondary: [], status: ["#待处理", "#进行中", "#已完成", "#非常重要"]});
               setAutoRulesState([]); setNamingTemplates(prev => prev.filter(t => !t.key.startsWith("custom_")));
-              setWorkspaceLang("zh-full"); setTheme("light");
+              setWorkspaceLang("zh-full"); setCustomWorkspaceTemplates([]); setTheme("light");
               showToast("配置已成功重置，请点击保存生效。", "warning");
             }}><RotateCcw size={15} />重置</button>
             <button className="btn btn-primary" onClick={handleSaveConfig} disabled={saveStatus === "saving"}>

@@ -224,6 +224,7 @@ impl FileManager {
     }
 
     pub fn init_workspace(workspace_dir: &str, dirs: Vec<String>) -> Result<(), String> {
+        for dir in &dirs { crate::workspace_templates::validate_directory_name(dir)?; }
         let ws_root = Path::new(workspace_dir);
         fs::create_dir_all(ws_root).map_err(|e| e.to_string())?;
         
@@ -241,6 +242,21 @@ impl FileManager {
         }
 
         Ok(())
+    }
+
+    pub fn list_workspace_directories(workspace_dir: &str) -> Result<Vec<String>, String> {
+        let root = Path::new(workspace_dir).canonicalize().map_err(|e| e.to_string())?;
+        let mut dirs = Vec::new();
+        for entry in fs::read_dir(&root).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let name = entry.file_name().to_string_lossy().to_string();
+            if crate::workspace_templates::validate_directory_name(&name).is_err() { continue; }
+            if entry.path().is_dir() && entry.path().canonicalize().is_ok_and(|path| path.starts_with(&root)) {
+                dirs.push(name);
+            }
+        }
+        dirs.sort_by_key(|name| name.to_lowercase());
+        Ok(dirs)
     }
 
     pub fn init_project_structure(project_name: &str, workspace_dir: &str, project_root_dir: &str) -> Result<(), String> {
@@ -315,6 +331,7 @@ impl FileManager {
 
         let illegal_chars = ['<', '>', ':', '"', '|', '?', '*'];
         for part in &cleaned_rel_path {
+            crate::workspace_templates::validate_directory_name(part)?;
             if *part == "." || *part == ".." || part.contains("..") {
                 return Err("文件夹路径不能包含 . 或 .. 路径穿越片段。".to_string());
             }
