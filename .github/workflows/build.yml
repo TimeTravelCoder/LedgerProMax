@@ -101,7 +101,8 @@ jobs:
           RELEASE_REPOSITORY: ${{ github.repository }}
         run: npm run release:prepare -- "$env:RELEASE_TAG" "$env:RELEASE_REPOSITORY"
 
-      - name: Create GitHub Release
+      - name: Create release draft
+        id: draft_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -110,9 +111,9 @@ jobs:
             Windows installers: NSIS (*-setup.exe) and MSI (*.msi).
             Updater signatures and SHA256SUMS are included.
             Commit: ${{ github.sha }}
-          draft: false
+          draft: true
           prerelease: false
-          make_latest: true
+          make_latest: false
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
@@ -122,3 +123,34 @@ jobs:
             release/*.exe.sig
             release/updater.json
             release/SHA256SUMS
+
+      - name: Verify uploaded artifacts before publishing
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.draft_release.outputs.id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const crypto = require('crypto');
+            const releaseId = Number(process.env.RELEASE_ID);
+            if (!Number.isSafeInteger(releaseId) || releaseId <= 0) throw new Error("Missing draft release ID");
+            const { data: release } = await github.rest.repos.getRelease({ ...context.repo, release_id: releaseId });
+            if (release.tag_name !== process.env.RELEASE_TAG) throw new Error("Release tag mismatch");
+            if (!release.draft) throw new Error('Expected an unpublished release draft');
+            const { data: assets } = await github.rest.repos.listReleaseAssets({ ...context.repo, release_id: release.id, per_page: 100 });
+            const expected = fs.readdirSync('release').sort();
+            const actual = assets.map(asset => asset.name).sort();
+            if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error('Uploaded asset filenames differ from generated metadata');
+            for (const asset of assets) {
+              const response = await github.rest.repos.getReleaseAsset({ ...context.repo, asset_id: asset.id, headers: { accept: 'application/octet-stream' } });
+              const downloaded = Buffer.from(response.data);
+              const local = fs.readFileSync(path.join('release', asset.name));
+              const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+              if (hash(downloaded) !== hash(local)) throw new Error('Uploaded bytes differ: ' + asset.name);
+            }
+            const updater = JSON.parse(fs.readFileSync('release/updater.json', 'utf8'));
+            const installerName = decodeURIComponent(new URL(updater.platforms['windows-x86_64'].url).pathname.split('/').pop());
+            if (!assets.some(asset => asset.name === installerName)) throw new Error('Updater points to a missing release asset');
+            await github.rest.repos.updateRelease({ ...context.repo, release_id: release.id, draft: false, prerelease: false, make_latest: 'true' });
