@@ -9,6 +9,17 @@
     "core:default",
     "updater:default",
     "process:default",
-    "core:window:allow-destroy"
+    "core:window:allow-destroy",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://github.com/TimeTravelCoder/LedgerProMax"
+        },
+        {
+          "url": "https://github.com/TimeTravelCoder/LedgerProMax/releases"
+        }
+      ]
+    }
   ]
 }

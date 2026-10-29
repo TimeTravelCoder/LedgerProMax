@@ -14,10 +14,11 @@
     "version:check": "node scripts/version.mjs",
     "version:sync": "node scripts/version.mjs --sync",
     "release:prepare": "node scripts/prepare-release.mjs",
-    "test:workflow": "node --test scripts/workflow.test.mjs scripts/import.test.mjs scripts/update.test.mjs"
+    "test:workflow": "node --test scripts/workflow.test.mjs scripts/import.test.mjs scripts/update.test.mjs scripts/project-links.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-opener": "2.5.5",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "lucide-react": "^1.16.0",

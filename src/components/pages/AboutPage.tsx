@@ -1,3 +1,6 @@
+import { useRef, useState, type MouseEvent } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { version } from "../../../package.json";
 import { ExternalLink, RefreshCw } from "lucide-react";
 
@@ -15,6 +18,23 @@ const repository = "https://github.com/TimeTravelCoder/LedgerProMax";
 
 export default function AboutPage({ isCheckingUpdate, updateStatus, updateErrorDetail, updateProgress, handleCheckForUpdates }: AboutPageProps) {
   const isDevelopment = import.meta.env.DEV;
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const openingLink = useRef(false);
+  const handleOpenLink = async (event: MouseEvent<HTMLAnchorElement>, url: string) => {
+    if (!isTauri()) return;
+    event.preventDefault();
+    if (openingLink.current) return;
+    openingLink.current = true;
+    setLinkError(null);
+    try {
+      await openUrl(url);
+    } catch (error) {
+      console.error("打开项目链接失败：", error);
+      setLinkError(url);
+    } finally {
+      openingLink.current = false;
+    }
+  };
 
   return (
     <div className="about-page">
@@ -40,13 +60,17 @@ export default function AboutPage({ isCheckingUpdate, updateStatus, updateErrorD
             <RefreshCw size={16} aria-hidden="true" />
             {isCheckingUpdate ? "处理中…" : "检查更新"}
           </button>
-          <a className="btn" href={`${repository}/releases`} target="_blank" rel="noreferrer">
+          <a className="btn" href={`${repository}/releases`} onClick={event => { void handleOpenLink(event, `${repository}/releases`); }} target="_blank" rel="noreferrer">
             更新记录 <ExternalLink size={14} aria-hidden="true" />
           </a>
-          <a className="btn" href={repository} target="_blank" rel="noreferrer">
+          <a className="btn" href={repository} onClick={event => { void handleOpenLink(event, repository); }} target="_blank" rel="noreferrer">
             项目主页 <ExternalLink size={14} aria-hidden="true" />
           </a>
         </div>
+        {linkError && <div className="about-description" role="alert">
+          <p>无法打开系统浏览器，请复制下方地址手动访问，或再次点击链接重试。</p>
+          <input className="input-field" aria-label="无法打开的链接地址" value={linkError} readOnly onFocus={event => event.currentTarget.select()} />
+        </div>}
         {updateStatus && <p className="about-description" role="status" aria-live="polite">{updateStatus}</p>}
         {updateProgress !== null && <progress className="update-progress" value={updateProgress} max={100} aria-label="更新下载进度" />}
         {updateErrorDetail && <details className="update-error-details"><summary>查看错误详情</summary><pre>{updateErrorDetail}</pre></details>}
