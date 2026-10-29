@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -49,13 +50,20 @@ test('version sync preserves dependency entries and is repeatable', t => {
   assert.equal(checkVersion(root), '3.2.4');
 });
 
-test('release URL preserves installer names with spaces and includes checksums', t => {
+test('release uses GitHub-safe asset names and hashes the uploaded filenames', t => {
   const { root } = fixture(t);
   const updater = prepareRelease(root, 'v3.2.3', 'TimeTravelCoder/LedgerProMax');
-  assert.match(updater.platforms['windows-x86_64'].url, /Ledger%20Pro%20Max_3.2.3_x64-setup.exe$/);
+  assert.match(updater.platforms['windows-x86_64'].url, /Ledger\.Pro\.Max_3\.2\.3_x64-setup\.exe$/);
   assert.equal(updater.platforms['windows-x86_64'].signature, 'signature');
   const hashes = readFileSync(join(root, 'release/SHA256SUMS'), 'utf8').trim().split('\n');
   assert.equal(hashes.length, 5);
+  for (const line of hashes) {
+    const [, expectedHash, name] = line.match(/^([a-f0-9]{64})  (.+)$/);
+    assert.match(name, /^[A-Za-z0-9._-]+$/);
+    assert.equal(createHash('sha256').update(readFileSync(join(root, 'release', name))).digest('hex'), expectedHash);
+  }
+  assert.equal(readFileSync(join(root, 'release/Ledger.Pro.Max_3.2.3_x64-setup.exe'), 'utf8'), 'installer');
+  assert.equal(readFileSync(join(root, 'release/Ledger.Pro.Max_3.2.3_x64-setup.exe.sig'), 'utf8'), 'signature\n');
   assert.ok(hashes.every(line => /^[a-f0-9]{64}  .+$/.test(line)));
   assert.throws(() => prepareRelease(root, 'v3.2.3', 'TimeTravelCoder/LedgerProMax'), /must be empty/);
 });

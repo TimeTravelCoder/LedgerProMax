@@ -13,8 +13,9 @@ export function prepareRelease(root, tag, repository) {
     const dir = resolve(root, 'src-tauri/target/release/bundle', folder);
     const installers = existsSync(dir) ? readdirSync(dir).filter(name => name.endsWith(suffix)) : [];
     if (installers.length !== 1) throw new Error(`Expected exactly one ${folder} installer, found ${installers.length}`);
-    const name = installers[0];
-    const installer = resolve(dir, name);
+    const sourceName = installers[0];
+    const name = sourceName.replace(/[^A-Za-z0-9._-]/g, ".");
+    const installer = resolve(dir, sourceName);
     const signaturePath = `${installer}.sig`;
     if (!statSync(installer).isFile() || statSync(installer).size === 0) throw new Error(`Empty installer: ${name}`);
     if (!existsSync(signaturePath)) throw new Error(`Missing signature: ${name}.sig`);
