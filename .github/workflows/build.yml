@@ -101,7 +101,8 @@ jobs:
           RELEASE_REPOSITORY: ${{ github.repository }}
         run: npm run release:prepare -- "$env:RELEASE_TAG" "$env:RELEASE_REPOSITORY"
 
-      - name: Create GitHub Release
+      - name: Create release draft
+        id: draft_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -127,12 +128,16 @@ jobs:
         uses: actions/github-script@v7
         env:
           RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.draft_release.outputs.id }}
         with:
           script: |
             const fs = require('fs');
             const path = require('path');
             const crypto = require('crypto');
-            const { data: release } = await github.rest.repos.getReleaseByTag({ ...context.repo, tag: process.env.RELEASE_TAG });
+            const releaseId = Number(process.env.RELEASE_ID);
+            if (!Number.isSafeInteger(releaseId) || releaseId <= 0) throw new Error("Missing draft release ID");
+            const { data: release } = await github.rest.repos.getRelease({ ...context.repo, release_id: releaseId });
+            if (release.tag_name !== process.env.RELEASE_TAG) throw new Error("Release tag mismatch");
             if (!release.draft) throw new Error('Expected an unpublished release draft');
             const { data: assets } = await github.rest.repos.listReleaseAssets({ ...context.repo, release_id: release.id, per_page: 100 });
             const expected = fs.readdirSync('release').sort();
